@@ -1,0 +1,662 @@
+// Gambetea — modelo de dominio (Sprint 1, ADR-006).
+// Postgres + Prisma (ADR-003). Dinero en euros enteros (Int). IDs internos (cuid).
+// Contextos: Football Data (espejo de la realidad), Identidad & Ligas, Juego Fantasy,
+// Mercado & Economía, Entrenadores, Estadio.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+//  ANTICORRUPCIÓN — mapeo IDs de proveedor ↔ IDs internos (ADR-001/006)
+// ============================================================
+model ProviderMapping {
+  id         String @id @default(cuid())
+  provider   String // "mock" | "api-football" | ...
+  entityType String // "competition" | "team" | "player" | "coach" | "match"
+  externalId String
+  internalId String
+  createdAt  DateTime @default(now())
+
+  @@unique([provider, entityType, externalId])
+  @@index([entityType, internalId])
+}
+
+// ============================================================
+//  FOOTBALL DATA — espejo de la realidad (poblado por el Data Hub)
+// ============================================================
+enum Position {
+  GK
+  DEF
+  MID
+  FWD
+}
+
+// Estado del jugador en el Hub (ADR-018). LEFT = fichado por otra liga; RETIRED = retirado.
+enum PlayerStatus {
+  ACTIVE
+  LEFT
+  RETIRED
+}
+
+// Tipos de noticia del feed (ADR-018).
+enum PlayerEventType {
+  NEW_PLAYER
+  CLUB_CHANGE
+  TRANSFER_OUT
+  RETIREMENT
+  POSITION_CHANGE
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  FINISHED
+  POSTPONED
+}
+
+enum MatchEventType {
+  GOAL
+  ASSIST
+  YELLOW
+  RED
+  OWN_GOAL
+  PEN_SCORED
+  PEN_MISSED
+  PEN_SAVED
+  SUB_IN
+  SUB_OUT
+  INJURY
+}
+
+model Competition {
+  id       String   @id @default(cuid())
+  name     String
+  country  String?
+  timezone String   @default("Europe/Madrid") // zona horaria para el tick diario (ADR-010)
+  seasons  Season[]
+}
+
+model Season {
+  id            String    @id @default(cuid())
+  competitionId String
+  competition   Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  name          String    // "2025/26"
+  current       Boolean   @default(false)
+  matches       Match[]
+  gameweeks     Gameweek[]
+  leagues       League[]
+  playerEvents  PlayerEvent[]
+
+  @@unique([competitionId, name])
+}
+
+// Feed de noticias del campeonato (ADR-018): traspasos, jubilaciones, altas, cambios.
+model PlayerEvent {
+  id        String          @id @default(cuid())
+  seasonId  String
+  season    Season          @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  type      PlayerEventType
+  playerId  String?
+  playerName String
+  fromLabel String?
+  toLabel   String?
+  createdAt DateTime        @default(now())
+
+  @@index([seasonId, createdAt])
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  shortName String
+  players   Player[]
+  coaches   Coach[]
+  homeMatches Match[] @relation("home")
+  awayMatches Match[] @relation("away")
+}
+
+model Player {
+  id         String   @id @default(cuid())
+  teamId     String?
+  team       Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  name       String
+  position   Position
+  status     PlayerStatus @default(ACTIVE) // ciclo de vida en el Hub (ADR-018)
+  rating     Int      @default(70) // calidad intrínseca (55-94) → base del valor de mercado
+  value      Int      @default(0) // valor de mercado (€), calculado — ADR-009
+  injuries   Injury[]
+  suspensions Suspension[]
+  appearances Appearance[]
+  events     MatchEvent[]
+  gwScores   PlayerGameweekScore[]
+  rosterOf   RosterPlayer[]
+  listings   MarketListing[]
+  insurances PlayerInsurance[]
+}
+
+model Coach {
+  id       String @id @default(cuid())
+  teamId   String?
+  team     Team?  @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  name     String
+  value    Int    @default(0) // valor de mercado (€) — ADR-009/011
+  gwScores CoachGameweekScore[]
+  rosterOf RosterCoach[]
+  listings CoachListing[]
+  marketListings MarketListing[]
+}
+
+model Match {
+  id         String      @id @default(cuid())
+  seasonId   String
+  season     Season      @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  gameweekId String?
+  gameweek   Gameweek?   @relation(fields: [gameweekId], references: [id], onDelete: SetNull)
+  homeTeamId String
+  awayTeamId String
+  homeTeam   Team        @relation("home", fields: [homeTeamId], references: [id])
+  awayTeam   Team        @relation("away", fields: [awayTeamId], references: [id])
+  kickoff    DateTime
+  status     MatchStatus @default(SCHEDULED)
+  homeGoals  Int?
+  awayGoals  Int?
+  events     MatchEvent[]
+  appearances Appearance[]
+
+  @@index([seasonId, kickoff])
+}
+
+model MatchEvent {
+  id       String         @id @default(cuid())
+  matchId  String
+  match    Match          @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  playerId String?
+  player   Player?        @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  minute   Int
+  type     MatchEventType
+
+  @@index([matchId])
+}
+
+model Appearance {
+  id       String  @id @default(cuid())
+  matchId  String
+  match    Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  playerId String
+  player   Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  started  Boolean @default(false)
+  minutes  Int     @default(0)
+  stats    Json? // estadísticas de conteo del partido (tiros, entradas, %pase…), ADR-015
+
+  @@unique([matchId, playerId])
+}
+
+model Injury {
+  id       String    @id @default(cuid())
+  playerId String
+  player   Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  reason   String?
+  from     DateTime  @default(now())
+  until    DateTime?
+  active   Boolean   @default(true)
+}
+
+model Suspension {
+  id       String  @id @default(cuid())
+  playerId String
+  player   Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  reason   String?
+  matches  Int     @default(1)
+  active   Boolean @default(true)
+}
+
+// ============================================================
+//  JORNADAS DEL JUEGO (mapea a la realidad; ADR-005/008)
+// ============================================================
+enum GameweekStatus {
+  UPCOMING
+  OPEN
+  LOCKED
+  FINISHED
+}
+
+model Gameweek {
+  id        String         @id @default(cuid())
+  seasonId  String
+  season    Season         @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  number    Int
+  deadline  DateTime
+  status    GameweekStatus @default(UPCOMING)
+  matches   Match[]
+  playerScores PlayerGameweekScore[]
+  coachScores  CoachGameweekScore[]
+  teamScores   FantasyGameweekScore[]
+  lineups      FantasyLineup[]
+  snapshots    GameweekSnapshot[]
+
+  @@unique([seasonId, number])
+}
+
+// ============================================================
+//  IDENTIDAD & LIGAS
+// ============================================================
+enum Role {
+  OWNER
+  MEMBER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  isAdmin      Boolean  @default(false) // rol de administrador GLOBAL (ADR-016)
+  createdAt    DateTime @default(now())
+  ownedLeagues League[] @relation("owner")
+  memberships  LeagueMembership[]
+  adminActions AdminAction[]
+}
+
+// Traza de auditoría de las acciones del administrador global (god-mode del Hub, ADR-016).
+model AdminAction {
+  id        String   @id @default(cuid())
+  adminId   String
+  admin     User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  action    String // p. ej. "team.money", "player.update", "roster.reassign"
+  target    String? // id de la entidad afectada
+  detail    Json? // payload/antes-después
+  createdAt DateTime @default(now())
+
+  @@index([adminId, createdAt])
+}
+
+model League {
+  id         String   @id @default(cuid())
+  name       String
+  seasonId   String
+  season     Season   @relation(fields: [seasonId], references: [id])
+  ownerId    String
+  owner      User     @relation("owner", fields: [ownerId], references: [id])
+  inviteCode String   @unique
+  createdAt  DateTime @default(now())
+  memberships LeagueMembership[]
+  listings    MarketListing[]
+  coachListings CoachListing[]
+  settings    LeagueSettings?
+}
+
+// Configuración económica por liga (ADR-014). Defaults = valores recomendados.
+model LeagueSettings {
+  id               String @id @default(cuid())
+  leagueId         String @unique
+  league           League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  prizePerPoint    Int    @default(15000)
+  salaryRate       Float  @default(0.018)
+  compensationStep Int    @default(250000)
+  tvRights         Int    @default(15000000)
+  initialBudget    Int    @default(200000000)
+  clauseMultiplier Int    @default(2)
+  coachCriteria    Json?  // overrides {clave:{enabled,value}} del baremo de entrenador (ADR-014/Fase 2)
+  playerCriteria   Json?  // overrides {clave:{enabled,value}} del baremo de jugador (ADR-015/Fase 3)
+}
+
+model LeagueMembership {
+  id          String       @id @default(cuid())
+  leagueId    String
+  league      League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        Role         @default(MEMBER)
+  joinedAt    DateTime     @default(now())
+  fantasyTeam FantasyTeam?
+
+  @@unique([leagueId, userId])
+}
+
+// ============================================================
+//  JUEGO FANTASY — equipo, plantilla, alineación, puntuación
+// ============================================================
+model FantasyTeam {
+  id           String   @id @default(cuid())
+  membershipId String   @unique
+  membership   LeagueMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  name         String
+  budget       Int      @default(0) // euros
+  roster       RosterPlayer[]
+  rosterCoaches RosterCoach[]
+  stadium      Stadium?
+  lineups      FantasyLineup[]
+  gwScores     FantasyGameweekScore[]
+  snapshots    GameweekSnapshot[]
+  bids         Bid[]
+  transactions Transaction[]
+  loans        Loan[]
+  insurances   PlayerInsurance[]
+  adOffers     AdBoardOffer[]
+  adContracts  AdContract[]
+  promos       TeamPromo[]
+}
+
+model RosterPlayer {
+  id            String   @id @default(cuid())
+  fantasyTeamId String
+  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  playerId      String
+  player        Player   @relation(fields: [playerId], references: [id])
+  purchasePrice Int
+  acquiredAt    DateTime @default(now())
+
+  @@unique([fantasyTeamId, playerId])
+}
+
+enum SlotRole {
+  STARTER
+  BENCH
+}
+
+model FantasyLineup {
+  id            String   @id @default(cuid())
+  fantasyTeamId String
+  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  gameweekId    String
+  gameweek      Gameweek @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
+  formation     String   @default("4-3-3")
+  captainId     String?
+  coachId       String?  // entrenador elegido para la jornada (ADR-011)
+  slots         FantasyLineupSlot[]
+
+  @@unique([fantasyTeamId, gameweekId])
+}
+
+model FantasyLineupSlot {
+  id       String   @id @default(cuid())
+  lineupId String
+  lineup   FantasyLineup @relation(fields: [lineupId], references: [id], onDelete: Cascade)
+  playerId String
+  role     SlotRole
+  order    Int
+}
+
+// Puntos del jugador REAL por jornada (calculado de eventos + reglas, ADR-008)
+model PlayerGameweekScore {
+  id         String   @id @default(cuid())
+  playerId   String
+  player     Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  gameweekId String
+  gameweek   Gameweek @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
+  points     Int      @default(0)
+  breakdown  Json?
+
+  @@unique([playerId, gameweekId])
+}
+
+// Puntos del equipo FANTASY por jornada (agregado)
+model FantasyGameweekScore {
+  id            String   @id @default(cuid())
+  fantasyTeamId String
+  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  gameweekId    String
+  gameweek      Gameweek @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
+  points        Int      @default(0)
+  eligible      Boolean  @default(true) // false si estaba en números rojos en el snapshot (ADR-010)
+
+  @@unique([fantasyTeamId, gameweekId])
+}
+
+// Snapshot congelado de la alineación y la caja de un equipo, 30 min antes del primer
+// partido de la jornada. Es lo que se usa al puntuar (ADR-010).
+model GameweekSnapshot {
+  id            String   @id @default(cuid())
+  fantasyTeamId String
+  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  gameweekId    String
+  gameweek      Gameweek @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
+  formation     String
+  captainId     String?
+  coachId       String?  // entrenador elegido, congelado (solo ese puntúa) — ADR-011
+  starters      String[] // playerIds titulares (orden)
+  bench         String[] // playerIds suplentes (orden = prioridad)
+  cash          Int      // saldo en el momento del snapshot
+  eligible      Boolean  // cash >= 0 → puntúa; si no, no suma pero sí cobra prima
+  createdAt     DateTime @default(now())
+
+  @@unique([fantasyTeamId, gameweekId])
+}
+
+// ============================================================
+//  ENTRENADORES (pilar diferencial — detalle en ADR-011)
+// ============================================================
+model RosterCoach {
+  id            String   @id @default(cuid())
+  fantasyTeamId String
+  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  coachId       String
+  coach         Coach    @relation(fields: [coachId], references: [id])
+  purchasePrice Int
+  acquiredAt    DateTime @default(now())
+
+  @@unique([fantasyTeamId, coachId])
+}
+
+model CoachGameweekScore {
+  id         String   @id @default(cuid())
+  coachId    String
+  coach      Coach    @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  gameweekId String
+  gameweek   Gameweek @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
+  points     Int      @default(0)
+  breakdown  Json?
+
+  @@unique([coachId, gameweekId])
+}
+
+// ============================================================
+//  ESTADIO (pilar diferencial — balance en ADR-013)
+// ============================================================
+enum StadiumUpgradeType {
+  STAND
+  PITCH
+  ACADEMY
+  VIP
+  WALL
+}
+
+model Stadium {
+  id            String   @id @default(cuid())
+  fantasyTeamId String   @unique
+  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  name          String   @default("Estadio")
+  level         Int      @default(1)
+  capacity      Int      @default(20000)
+  fanHappiness  Int      @default(50)
+  upgrades      StadiumUpgrade[]
+}
+
+model StadiumUpgrade {
+  id        String   @id @default(cuid())
+  stadiumId String
+  stadium   Stadium  @relation(fields: [stadiumId], references: [id], onDelete: Cascade)
+  type      StadiumUpgradeType
+  level     Int      @default(0)
+
+  @@unique([stadiumId, type])
+}
+
+// Vallas publicitarias (ADR-013): 4 lados, ofertas random de marcas por 1 temporada.
+enum AdSide {
+  NORTH
+  SOUTH
+  EAST
+  WEST
+}
+
+model AdBoardOffer {
+  id            String   @id @default(cuid())
+  fantasyTeamId String
+  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  side          AdSide
+  brand         String
+  amount        Int
+  createdAt     DateTime @default(now())
+}
+
+model AdContract {
+  id            String   @id @default(cuid())
+  fantasyTeamId String
+  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  side          AdSide
+  brand         String
+  amount        Int
+  seasonId      String
+  createdAt     DateTime @default(now())
+
+  @@unique([fantasyTeamId, side])
+}
+
+// ============================================================
+//  MERCADO & ECONOMÍA (detalle en ADR-009)
+// ============================================================
+enum ListingStatus {
+  OPEN
+  RESOLVED
+  CANCELLED
+}
+
+enum ListingKind {
+  PLAYER
+  COACH
+}
+
+// Listado de mercado POLIMÓRFICO: un jugador o un entrenador (misma tabla, mismas pujas).
+model MarketListing {
+  id           String   @id @default(cuid())
+  leagueId     String
+  league       League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  kind         ListingKind @default(PLAYER)
+  playerId     String?
+  player       Player?  @relation(fields: [playerId], references: [id])
+  coachId      String?
+  coach        Coach?   @relation(fields: [coachId], references: [id])
+  sellerTeamId String?  // null = agente libre / sistema
+  askingPrice  Int
+  status       ListingStatus @default(OPEN)
+  closesAt     DateTime
+  bids         Bid[]
+
+  @@index([leagueId, status])
+}
+
+model CoachListing {
+  id          String   @id @default(cuid())
+  leagueId    String
+  league      League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  coachId     String
+  coach       Coach    @relation(fields: [coachId], references: [id])
+  askingPrice Int
+  status      ListingStatus @default(OPEN)
+  closesAt    DateTime
+
+  @@index([leagueId, status])
+}
+
+model Bid {
+  id            String   @id @default(cuid())
+  listingId     String
+  listing       MarketListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  fantasyTeamId String
+  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  amount        Int
+  createdAt     DateTime @default(now())
+
+  @@unique([listingId, fantasyTeamId])
+}
+
+enum TxType {
+  BUY
+  SELL
+  PRIZE
+  SALARY
+  INSURANCE
+  LOAN
+  LOAN_REPAY
+  STADIUM
+  COACH
+  COMPENSATION
+  ADJUST
+}
+
+// Promo random para los últimos clasificados (catch-up, Sprint 14).
+enum PromoKind {
+  DOUBLE_PRIZE
+  NO_SALARY
+  TRIPLE_CAPTAIN
+  DOUBLE_POINTS
+}
+
+model TeamPromo {
+  id            String   @id @default(cuid())
+  fantasyTeamId String
+  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  gameweekId    String // jornada en la que aplica
+  kind          PromoKind
+  createdAt     DateTime @default(now())
+
+  @@unique([fantasyTeamId, gameweekId])
+}
+
+enum InsuranceTier {
+  BASIC
+  MEDIUM
+  ADVANCED
+}
+
+// Préstamo del banco con amortización francesa (cuota constante) — ADR-012/economía.
+model Loan {
+  id                    String   @id @default(cuid())
+  fantasyTeamId         String
+  fantasyTeam           FantasyTeam @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  principal             Int
+  ratePerGw             Float    // tipo por jornada derivado del 5% TAE
+  installment           Int      // cuota constante por jornada
+  outstanding           Int      // principal pendiente
+  installmentsTotal     Int
+  installmentsPaid      Int      @default(0)
+  lastChargedGameweekId String?  // idempotencia del cobro por jornada
+  status                String   @default("ACTIVE") // ACTIVE | PAID
+  createdAt             DateTime @default(now())
+
+  @@index([fantasyTeamId, status])
+}
+
+// Seguro médico individual por jugador (contractual con el equipo) — se pierde al traspasar.
+model PlayerInsurance {
+  id            String        @id @default(cuid())
+  fantasyTeamId String
+  fantasyTeam   FantasyTeam   @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  playerId      String
+  player        Player        @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  tier          InsuranceTier
+  createdAt     DateTime      @default(now())
+
+  @@unique([fantasyTeamId, playerId])
+}
+
+model Transaction {
+  id            String   @id @default(cuid())
+  fantasyTeamId String
+  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  type          TxType
+  amount        Int      // con signo: negativo = gasto
+  description   String?
+  gameweekId    String?  // jornada asociada (p. ej. prima) — permite idempotencia
+  createdAt     DateTime @default(now())
+
+  @@index([fantasyTeamId, createdAt])
+}

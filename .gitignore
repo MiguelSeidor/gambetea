@@ -1,0 +1,23 @@
+# Dependencias
+node_modules/
+
+# Entornos (nunca subir secretos; sí subir los .example)
+.env
+.env.local
+.env.*.local
+
+# Builds / cachés
+dist/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# Prisma (cliente generado, si se usa output propio)
+generated/
+
+# Logs de desarrollo
+*.log
+
+# SO / editor
+.DS_Store
+Thumbs.db

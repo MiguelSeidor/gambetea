@@ -90,10 +90,15 @@ export default function AppProvider({ children }: { children: React.ReactNode })
       setLeagueId(id);
       setLid(id);
       setPhase("loading");
+      // Si la liga no está en la lista (recién creada/unida), refresca para que 'league' no sea null.
+      if (!leagues.some((l) => l.id === id)) {
+        const ls = await api.myLeagues().catch(() => leagues);
+        setLeagues(ls);
+      }
       await loadLeagueData(id);
       setPhase("ready");
     },
-    [loadLeagueData],
+    [leagues, loadLeagueData],
   );
 
   const refresh = useCallback(async () => {
@@ -179,7 +184,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, team, gwNumber, leagues, leagueId, league, selectLeague, goToLobby, logout } = useApp();
   const [changePwOpen, setChangePwOpen] = useState(false);
-  const adminMode = !league; // el superadmin no tiene liga activa
+  const adminMode = !!user.isAdmin; // solo el superadmin ve el shell de admin (no "no tener liga")
   const title = TITLES[path] ?? "Gambetea";
   const initial = (team?.name ?? user.displayName).charAt(0).toUpperCase();
   const navGroups = adminMode ? [ADMIN_GROUP] : NAV;

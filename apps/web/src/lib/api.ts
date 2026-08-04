@@ -444,4 +444,5 @@ export const api = {
   adminHubReset: () => request<{ truncated: number }>("/admin/hub/reset", { method: "POST" }),
   adminHubBackfill: () => request<{ provider: string; teams: number; players: number; coaches: number; gameweeks: number; matches: number }>("/admin/hub/backfill", { method: "POST" }),
   adminHubPlay: (count: number) => request<{ played: { matchday: number; matches: number; events: number; playersScored: number }[] }>("/admin/hub/play", { method: "POST", body: { count } }),
+  adminHubSyncChanges: () => request<{ total: number; newPlayers: number; clubChanges: number; positionChanges: number; departures: number; errors: number }>("/admin/hub/sync-changes", { method: "POST" }),
 };

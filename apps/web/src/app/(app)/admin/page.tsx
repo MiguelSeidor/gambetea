@@ -99,6 +99,12 @@ export default function AdminPanel() {
             <button className="btn-sm ghost" disabled={busy}
               onClick={() => run(async () => { const r = await api.adminHubPlay(playCount); await loadOverview(); notify(`Jugadas ${r.played.length} jornada(s)`, true); }, "Jornadas jugadas")}>Jugar jornadas</button>
           </span>
+          <button className="btn-sm ghost" disabled={busy}
+            onClick={() => run(async () => {
+              const r = await api.adminHubSyncChanges();
+              await loadOverview();
+              notify(r.total === 0 ? "Sin cambios en el proveedor" : `${r.total} cambios: ${r.newPlayers} altas · ${r.clubChanges} club · ${r.positionChanges} posición · ${r.departures} bajas`, true);
+            }, "Comprobación de cambios completada")}>Comprobar cambios</button>
         </div>
         <p className="muted" style={{ fontSize: ".76rem", marginTop: 10 }}>
           «Inicializar» borra equipos, jugadores, ligas fantasy y partidos (las cuentas de usuario se conservan). «Rellenar» pide los datos al proveedor activo. «Jugar jornadas» ingiere y puntúa las siguientes.

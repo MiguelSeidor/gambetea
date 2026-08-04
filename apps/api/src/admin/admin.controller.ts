@@ -125,4 +125,10 @@ export class AdminController {
   hubPlay(@CurrentUser() u: AuthUser, @Body() body: { count?: number }) {
     return this.admin.hubPlay(u.id, body?.count ?? 1);
   }
+
+  @Post("hub/sync-changes")
+  @HttpCode(200)
+  hubSyncChanges(@CurrentUser() u: AuthUser) {
+    return this.admin.hubSyncChanges(u.id);
+  }
 }

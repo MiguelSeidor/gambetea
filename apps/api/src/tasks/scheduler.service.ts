@@ -7,6 +7,7 @@ import { ValuationService } from "../market/valuation.service";
 import { EconomyService } from "../market/economy.service";
 import { createProvider } from "../data-hub/providers/provider.factory";
 import { playGameweekRecord } from "../data-hub/sync";
+import { HubSyncService } from "../hub/hub-sync.service";
 
 /** Minutos tras el último partido de la jornada en que se reparten puntos y primas (ADR-010). */
 const SCORING_DELAY_MIN = 30;
@@ -41,6 +42,7 @@ export class SchedulerService {
     private readonly market: MarketService,
     private readonly valuation: ValuationService,
     private readonly economy: EconomyService,
+    private readonly hubSync: HubSyncService,
   ) {}
 
   /** Cobra las tres cargas de la jornada: salarios + seguro + cuotas de préstamo. Idempotente. */
@@ -57,6 +59,18 @@ export class SchedulerService {
   async minuteTick(): Promise<void> {
     await this.snapshotDue();
     await this.scoreDue();
+  }
+
+  /** Cada día (05:00): diff del Hub contra el proveedor (altas, club, posición, bajas). ADR-018/019.
+   *  Con el mock no hay cambios (idempotente); con api-football cuesta ~21 peticiones. */
+  @Cron("0 5 * * *", { name: "hub-daily-diff" })
+  async dailyHubDiff(): Promise<void> {
+    try {
+      const r = await this.hubSync.detectChanges();
+      if (r.total > 0) this.log.log(`Diff diario del Hub: ${r.total} cambios`);
+    } catch (e) {
+      this.log.warn(`Diff diario del Hub omitido: ${(e as Error).message}`);
+    }
   }
 
   /** Cada hora: en las competiciones donde son las 00:00 locales, cobra salarios (si hoy hay

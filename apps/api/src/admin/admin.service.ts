@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { PlayerLifecycleService } from "../hub/player-lifecycle.service";
+import { HubSyncService } from "../hub/hub-sync.service";
 import { createProvider } from "../data-hub/providers/provider.factory";
 import { backfill as runBackfill, playGameweekRecord } from "../data-hub/sync";
 import { ScoringService } from "../scoring/scoring.service";
@@ -19,6 +20,7 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly scoring: ScoringService,
     private readonly lifecycle: PlayerLifecycleService,
+    private readonly hubSync: HubSyncService,
   ) {}
 
   private audit(adminId: string, action: string, target: string | null, detail: unknown) {
@@ -289,6 +291,13 @@ export class AdminService {
     const summary = await runBackfill(this.prisma, provider);
     await this.audit(adminId, "hub.backfill", null, { provider: provider.name, ...summary });
     return { provider: provider.name, ...summary };
+  }
+
+  /** Comprueba cambios en el proveedor (altas, club, posición, bajas) y actualiza el Hub. */
+  async hubSyncChanges(adminId: string) {
+    const r = await this.hubSync.detectChanges();
+    await this.audit(adminId, "hub.syncChanges", null, r);
+    return r;
   }
 
   /** Juega (ingiere + puntúa) las próximas `count` jornadas con datos del proveedor. */

@@ -1,32 +1,43 @@
 import { Injectable, Logger } from "@nestjs/common";
+import * as nodemailer from "nodemailer";
 
-// Envío de email. Usa Resend (https://resend.com) si hay RESEND_API_KEY; si no, en desarrollo
-// registra el contenido en el log (para poder probar sin proveedor de correo). Sin dependencias
-// extra: llamada HTTP directa.
+// Envío de email por SMTP (Gmail, Outlook o cualquier SMTP). No requiere verificar dominios ni
+// tocar DNS: basta usuario + contraseña (en Gmail, una "contraseña de aplicación"). Si no hay
+// SMTP configurado, en desarrollo se registra el contenido en el log (para probar sin proveedor).
 @Injectable()
 export class MailService {
   private readonly log = new Logger("Mail");
+  private transporter: nodemailer.Transporter | null = null;
 
   get configured(): boolean {
-    return !!process.env.RESEND_API_KEY;
+    return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+  }
+
+  private getTransport(): nodemailer.Transporter | null {
+    if (!this.configured) return null;
+    if (!this.transporter) {
+      const port = Number(process.env.SMTP_PORT ?? "587");
+      this.transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port,
+        secure: port === 465, // 465 = SSL directo; 587 = STARTTLS
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      });
+    }
+    return this.transporter;
   }
 
   async send(to: string, subject: string, html: string): Promise<void> {
-    const key = process.env.RESEND_API_KEY;
-    const from = process.env.MAIL_FROM ?? "Gambetea <onboarding@resend.dev>";
-    if (!key) {
-      this.log.warn(`[DEV] Sin RESEND_API_KEY: email NO enviado a ${to} · asunto "${subject}"`);
+    const t = this.getTransport();
+    const from = process.env.MAIL_FROM ?? process.env.SMTP_USER ?? "Gambetea";
+    if (!t) {
+      this.log.warn(`[DEV] Sin SMTP configurado: email NO enviado a ${to} · asunto "${subject}"`);
       return;
     }
     try {
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from, to, subject, html }),
-      });
-      if (!res.ok) this.log.error(`Resend ${res.status}: ${await res.text()}`);
+      await t.sendMail({ from, to, subject, html });
     } catch (e) {
-      this.log.error(`Error enviando email: ${(e as Error).message}`);
+      this.log.error(`Error enviando email por SMTP: ${(e as Error).message}`);
     }
   }
 }

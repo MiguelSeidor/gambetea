@@ -310,6 +310,12 @@ export interface AdminTeamDetail {
   coaches: { coachId: string; name: string; value: number; purchasePrice: number }[];
   transactions: TransactionRow[];
 }
+export interface ResetRequest {
+  id: string;
+  userEmail: string;
+  userName: string;
+  createdAt: string;
+}
 export interface HubStatus {
   provider: string;
   season: string | null;
@@ -336,10 +342,10 @@ export const api = {
     request<AuthResponse>("/auth/register", { method: "POST", body }),
   login: (body: { email: string; password: string }) =>
     request<AuthResponse>("/auth/login", { method: "POST", body }),
-  forgotPassword: (email: string) =>
-    request<{ ok: boolean }>("/auth/forgot-password", { method: "POST", body: { email } }),
-  resetPassword: (token: string, password: string) =>
-    request<{ ok: boolean }>("/auth/reset-password", { method: "POST", body: { token, password } }),
+  requestReset: (email: string) =>
+    request<{ ok: boolean }>("/auth/request-reset", { method: "POST", body: { email } }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/change-password", { method: "POST", body: { currentPassword, newPassword } }),
 
   myLeagues: () => request<LeagueSummary[]>("/leagues"),
   league: (id: string) => request<LeagueDetail>(`/leagues/${id}`),
@@ -449,4 +455,7 @@ export const api = {
   adminHubBackfill: () => request<{ provider: string; teams: number; players: number; coaches: number; gameweeks: number; matches: number }>("/admin/hub/backfill", { method: "POST" }),
   adminHubPlay: (count: number) => request<{ played: { matchday: number; matches: number; events: number; playersScored: number }[] }>("/admin/hub/play", { method: "POST", body: { count } }),
   adminHubSyncChanges: () => request<{ total: number; newPlayers: number; clubChanges: number; positionChanges: number; departures: number; errors: number; departed: { playerId: string; name: string }[] }>("/admin/hub/sync-changes", { method: "POST" }),
+  adminResetRequests: () => request<ResetRequest[]>("/admin/reset-requests"),
+  adminApproveReset: (id: string) => request<{ ok: boolean; tempPassword: string }>(`/admin/reset-requests/${id}/approve`, { method: "POST" }),
+  adminRejectReset: (id: string) => request<{ ok: boolean }>(`/admin/reset-requests/${id}/reject`, { method: "POST" }),
 };

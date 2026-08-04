@@ -13,7 +13,7 @@ export default function Recuperar() {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.forgotPassword(email);
+      await api.requestReset(email);
     } finally {
       setSent(true); // se muestra siempre lo mismo, exista o no la cuenta
       setLoading(false);
@@ -30,19 +30,19 @@ export default function Recuperar() {
 
       {sent ? (
         <>
-          <p className="sub">Si existe una cuenta con ese correo, te hemos enviado un enlace para restablecer la contraseña. Revisa tu bandeja (y el spam). El enlace caduca en 1 hora.</p>
+          <p className="sub">Hemos enviado tu solicitud al administrador. Cuando la apruebe, tu contraseña pasará a ser <b>12345678</b>; entra con ella y cámbiala desde tu cuenta.</p>
           <p className="auth-alt"><Link href="/login">Volver a entrar</Link></p>
         </>
       ) : (
         <>
-          <p className="sub">Escribe tu correo y te enviaremos un enlace para elegir una nueva contraseña.</p>
+          <p className="sub">Escribe tu correo y enviaremos una solicitud de reseteo al administrador para que la apruebe.</p>
           <div className="field">
-            <label htmlFor="email">Correo</label>
-            <input id="email" type="email" placeholder="tu@correo.com" autoComplete="email"
+            <label htmlFor="email">Correo o usuario</label>
+            <input id="email" type="text" placeholder="tu@correo.com" autoComplete="username"
               value={email} onChange={(e) => setEmail(e.target.value)} required />
           </div>
           <button className="btn" type="submit" disabled={loading}>
-            <span>{loading ? "Enviando…" : "Enviar enlace"}</span>
+            <span>{loading ? "Enviando…" : "Solicitar reseteo"}</span>
           </button>
           <p className="auth-alt">¿Ya la recuerdas? <Link href="/login">Entrar</Link></p>
         </>

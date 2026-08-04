@@ -278,3 +278,7 @@
 .lobby-league .ll-main b { font-size: 1.02rem; }
 .lobby-league .ll-main small { color: var(--muted); font-size: .78rem; }
 .lobby-league .ll-go { color: var(--accent); font-weight: 600; font-size: .9rem; white-space: nowrap; }
+
+.side-pw { width: 100%; margin-top: 8px; background: transparent; border: 1px solid var(--line-2, #302c3a);
+  border-radius: 9px; padding: 8px; color: var(--muted); font-size: .8rem; cursor: pointer; transition: color .15s, border-color .15s; }
+.side-pw:hover { color: var(--ink); border-color: var(--accent); }

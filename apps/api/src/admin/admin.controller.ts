@@ -131,4 +131,22 @@ export class AdminController {
   hubSyncChanges(@CurrentUser() u: AuthUser) {
     return this.admin.hubSyncChanges(u.id);
   }
+
+  // Solicitudes de reseteo de contraseña
+  @Get("reset-requests")
+  resetRequests() {
+    return this.admin.listResetRequests();
+  }
+
+  @Post("reset-requests/:id/approve")
+  @HttpCode(200)
+  approveReset(@CurrentUser() u: AuthUser, @Param("id") id: string) {
+    return this.admin.approveResetRequest(u.id, id);
+  }
+
+  @Post("reset-requests/:id/reject")
+  @HttpCode(200)
+  rejectReset(@CurrentUser() u: AuthUser, @Param("id") id: string) {
+    return this.admin.rejectResetRequest(u.id, id);
+  }
 }

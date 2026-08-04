@@ -87,6 +87,28 @@ export class AuthService {
     return { ok: true };
   }
 
+  // === Reseteo por aprobación del admin (sin email) ===========================
+
+  /** Crea una solicitud de reseteo que el administrador aprobará. Responde igual exista o no. */
+  async requestReset(email: string) {
+    const user = await this.users.findByEmail(email);
+    if (user) {
+      const pending = await this.prisma.passwordResetRequest.findFirst({ where: { userId: user.id, status: "PENDING" } });
+      if (!pending) await this.prisma.passwordResetRequest.create({ data: { userId: user.id } });
+    }
+    return { ok: true };
+  }
+
+  /** Cambio de contraseña del propio usuario (verificando la actual). */
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.users.findById(userId);
+    if (!user || !bcrypt.compareSync(currentPassword, user.passwordHash)) {
+      throw new BadRequestException("La contraseña actual no es correcta");
+    }
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash: bcrypt.hashSync(newPassword, 10) } });
+    return { ok: true };
+  }
+
   private sign(user: { id: string; email: string; displayName: string; isAdmin?: boolean }) {
     const accessToken = this.jwt.sign({ sub: user.id, email: user.email });
     return {

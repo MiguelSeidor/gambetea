@@ -263,6 +263,20 @@ model User {
   memberships  LeagueMembership[]
   adminActions AdminAction[]
   passwordResets PasswordReset[]
+  resetRequests  PasswordResetRequest[]
+}
+
+// Solicitudes de reseteo aprobadas por el admin (sin email). Al aprobar, la contraseña pasa a
+// "12345678" y el usuario la cambia al entrar.
+model PasswordResetRequest {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status     String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  @@index([status])
 }
 
 // Tokens de recuperación de contraseña (se guarda el HASH del token, no el token).

@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import * as bcrypt from "bcryptjs";
 import { PrismaService } from "../prisma/prisma.service";
 import { PlayerLifecycleService } from "../hub/player-lifecycle.service";
 import { HubSyncService } from "../hub/hub-sync.service";
@@ -291,6 +292,40 @@ export class AdminService {
     const summary = await runBackfill(this.prisma, provider);
     await this.audit(adminId, "hub.backfill", null, { provider: provider.name, ...summary });
     return { provider: provider.name, ...summary };
+  }
+
+  // === Solicitudes de reseteo de contraseña (aprobación del admin) ==============
+
+  /** Solicitudes de reseteo pendientes. */
+  async listResetRequests() {
+    const rows = await this.prisma.passwordResetRequest.findMany({
+      where: { status: "PENDING" },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, createdAt: true, user: { select: { email: true, displayName: true } } },
+    });
+    return rows.map((r) => ({ id: r.id, userEmail: r.user.email, userName: r.user.displayName, createdAt: r.createdAt }));
+  }
+
+  /** Aprueba: la contraseña del usuario pasa a "12345678" (la cambia al entrar). */
+  async approveResetRequest(adminId: string, id: string) {
+    const req = await this.prisma.passwordResetRequest.findUnique({ where: { id }, select: { userId: true, status: true } });
+    if (!req || req.status !== "PENDING") throw new NotFoundException("Solicitud no encontrada o ya resuelta");
+    const passwordHash = bcrypt.hashSync("12345678", 10);
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: req.userId }, data: { passwordHash } }),
+      this.prisma.passwordResetRequest.update({ where: { id }, data: { status: "APPROVED", resolvedAt: new Date() } }),
+    ]);
+    await this.audit(adminId, "reset.approve", req.userId, {});
+    return { ok: true, tempPassword: "12345678" };
+  }
+
+  /** Rechaza la solicitud sin cambiar nada. */
+  async rejectResetRequest(adminId: string, id: string) {
+    const req = await this.prisma.passwordResetRequest.findUnique({ where: { id }, select: { status: true } });
+    if (!req || req.status !== "PENDING") throw new NotFoundException("Solicitud no encontrada o ya resuelta");
+    await this.prisma.passwordResetRequest.update({ where: { id }, data: { status: "REJECTED", resolvedAt: new Date() } });
+    await this.audit(adminId, "reset.reject", id, {});
+    return { ok: true };
   }
 
   /** Comprueba cambios en el proveedor (altas, club, posición, bajas) y actualiza el Hub. */

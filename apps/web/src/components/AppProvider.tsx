@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import Icon from "@/components/Icon";
+import ChangePasswordModal from "@/components/ChangePasswordModal";
 import {
   api,
   clearSession,
@@ -177,6 +178,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
   const { user, team, gwNumber, leagues, leagueId, league, selectLeague, goToLobby, logout } = useApp();
+  const [changePwOpen, setChangePwOpen] = useState(false);
   const adminMode = !league; // el superadmin no tiene liga activa
   const title = TITLES[path] ?? "Gambetea";
   const initial = (team?.name ?? user.displayName).charAt(0).toUpperCase();
@@ -230,13 +232,16 @@ function Shell({ children }: { children: React.ReactNode }) {
         <div className="side-foot">
           <div className="user-chip">
             <span className="avatar">{initial}</span>
-            <span className="um">{team?.name ?? "Mi equipo"}<small>{user.displayName}</small></span>
+            <span className="um">{adminMode ? "Administrador" : (team?.name ?? "Mi equipo")}<small>{user.displayName}</small></span>
             <button onClick={logout} className="icon-btn" style={{ marginLeft: "auto", width: 32, height: 32 }} aria-label="Salir">
               <Icon name="logout" size={16} />
             </button>
           </div>
+          <button className="side-pw" onClick={() => setChangePwOpen(true)}>Cambiar contraseña</button>
         </div>
       </aside>
+
+      <ChangePasswordModal open={changePwOpen} onClose={() => setChangePwOpen(false)} />
 
       <div className="main">
         <header className="topbar">

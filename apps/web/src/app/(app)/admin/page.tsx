@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/components/AppProvider";
 import Modal from "@/components/Modal";
-import { api, type AdminOverview, type AdminTeamDetail, type HubStatus, type PlayerPos } from "@/lib/api";
+import { api, type AdminOverview, type AdminTeamDetail, type HubStatus, type PlayerPos, type ResetRequest } from "@/lib/api";
 
 const eur = (n: number) => new Intl.NumberFormat("es-ES").format(n) + " €";
 const POSITIONS: PlayerPos[] = ["GK", "DEF", "MID", "FWD"];
@@ -27,6 +27,7 @@ export default function AdminPanel() {
   const [hubStatus, setHubStatus] = useState<HubStatus | null>(null);
   const [playCount, setPlayCount] = useState(1);
   const [resetOpen, setResetOpen] = useState(false);
+  const [resetReqs, setResetReqs] = useState<ResetRequest[]>([]);
 
   const notify = (text: string, ok: boolean) => {
     setToast({ text, ok });
@@ -45,10 +46,11 @@ export default function AdminPanel() {
   };
 
   const loadOverview = useCallback(async () => {
-    const [o, a, h] = await Promise.all([api.adminOverview(), api.adminAudit(), api.adminHubStatus()]);
+    const [o, a, h, rr] = await Promise.all([api.adminOverview(), api.adminAudit(), api.adminHubStatus(), api.adminResetRequests()]);
     setOv(o);
     setAudit(a);
     setHubStatus(h);
+    setResetReqs(rr);
   }, []);
   useEffect(() => {
     if (user.isAdmin) void loadOverview();
@@ -77,6 +79,35 @@ export default function AdminPanel() {
         <span className="eb">God-mode del Hub</span>
         <h1>Administración global</h1>
         <p>Correcciones quirúrgicas sobre datos, economía y puntuaciones. Cada acción queda auditada.</p>
+      </div>
+
+      {/* Solicitudes de reseteo de contraseña */}
+      <div className="card-head" style={{ marginBottom: 0 }}>
+        <h3>Solicitudes de reseteo{resetReqs.length ? ` (${resetReqs.length})` : ""}</h3>
+      </div>
+      <div className="card pad0">
+        {resetReqs.length === 0 ? (
+          <p className="muted" style={{ padding: "16px 18px", margin: 0, fontSize: ".85rem" }}>No hay solicitudes pendientes.</p>
+        ) : (
+          <table className="table">
+            <thead><tr><th>Usuario</th><th>Correo</th><th>Solicitada</th><th style={{ textAlign: "right" }}>Acción</th></tr></thead>
+            <tbody>
+              {resetReqs.map((r) => (
+                <tr key={r.id}>
+                  <td><strong>{r.userName}</strong></td>
+                  <td className="muted">{r.userEmail}</td>
+                  <td className="muted">{new Date(r.createdAt).toLocaleString("es-ES")}</td>
+                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    <button className="btn-sm" disabled={busy}
+                      onClick={() => run(async () => { await api.adminApproveReset(r.id); await loadOverview(); }, `Aprobado · contraseña de ${r.userName} = 12345678`)}>Aprobar</button>
+                    <button className="btn-sm ghost" style={{ marginLeft: 6 }} disabled={busy}
+                      onClick={() => run(async () => { await api.adminRejectReset(r.id); await loadOverview(); }, "Solicitud rechazada")}>Rechazar</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Hub / Datos (Inicializar y rellenar) */}

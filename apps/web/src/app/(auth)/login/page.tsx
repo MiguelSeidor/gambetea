@@ -45,6 +45,9 @@ export default function Login() {
         <input id="pass" type="password" placeholder="••••••••" autoComplete="current-password"
           value={password} onChange={(e) => setPassword(e.target.value)} required />
       </div>
+      <p style={{ textAlign: "right", margin: "-6px 0 0" }}>
+        <Link href="/recuperar" style={{ fontSize: ".82rem" }}>¿Olvidaste tu contraseña?</Link>
+      </p>
 
       {error && <p className="auth-error">{error}</p>}
 

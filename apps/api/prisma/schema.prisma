@@ -262,6 +262,20 @@ model User {
   ownedLeagues League[] @relation("owner")
   memberships  LeagueMembership[]
   adminActions AdminAction[]
+  passwordResets PasswordReset[]
+}
+
+// Tokens de recuperación de contraseña (se guarda el HASH del token, no el token).
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 // Traza de auditoría de las acciones del administrador global (god-mode del Hub, ADR-016).

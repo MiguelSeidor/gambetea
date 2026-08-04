@@ -13,6 +13,7 @@ import { StadiumModule } from "./stadium/stadium.module";
 import { TasksModule } from "./tasks/tasks.module";
 import { AdminModule } from "./admin/admin.module";
 import { HubModule } from "./hub/hub.module";
+import { MailModule } from "./mail/mail.module";
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { HubModule } from "./hub/hub.module";
     TasksModule,
     AdminModule,
     HubModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [AppService],

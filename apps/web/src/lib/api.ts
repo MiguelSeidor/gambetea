@@ -336,6 +336,10 @@ export const api = {
     request<AuthResponse>("/auth/register", { method: "POST", body }),
   login: (body: { email: string; password: string }) =>
     request<AuthResponse>("/auth/login", { method: "POST", body }),
+  forgotPassword: (email: string) =>
+    request<{ ok: boolean }>("/auth/forgot-password", { method: "POST", body: { email } }),
+  resetPassword: (token: string, password: string) =>
+    request<{ ok: boolean }>("/auth/reset-password", { method: "POST", body: { token, password } }),
 
   myLeagues: () => request<LeagueSummary[]>("/leagues"),
   league: (id: string) => request<LeagueDetail>(`/leagues/${id}`),

@@ -18,6 +18,11 @@ generated/
 # Logs de desarrollo
 *.log
 
+# Secretos / tokens (NUNCA subir)
+gitToken.txt
+*token*.txt
+*.pem
+
 # SO / editor
 .DS_Store
 Thumbs.db

@@ -268,3 +268,13 @@
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
 @keyframes modalFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modalPop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+
+/* Lobby de ligas */
+.lobby-league { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  background: var(--card, #141118); border: 1px solid var(--line-2, #302c3a); border-radius: 12px; padding: 14px 16px;
+  transition: border-color .15s, transform .15s; }
+.lobby-league:hover { border-color: var(--accent); transform: translateY(-1px); }
+.lobby-league .ll-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.lobby-league .ll-main b { font-size: 1.02rem; }
+.lobby-league .ll-main small { color: var(--muted); font-size: .78rem; }
+.lobby-league .ll-go { color: var(--accent); font-weight: 600; font-size: .9rem; white-space: nowrap; }

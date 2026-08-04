@@ -45,7 +45,7 @@ export default function Dashboard() {
   }
 
   function copyInvite() {
-    void navigator.clipboard?.writeText(league.inviteCode).then(() => {
+    void navigator.clipboard?.writeText(league?.inviteCode ?? "").then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     });
@@ -62,7 +62,7 @@ export default function Dashboard() {
         <p>Esto es lo que está pasando en tu equipo. Aún puedes retocar la alineación antes del cierre.</p>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 10, marginTop: 12, padding: "8px 12px", border: "1px solid var(--line, #2a2733)", borderRadius: 10 }}>
           <span className="muted" style={{ fontSize: ".78rem" }}>Invita a tu liga · código</span>
-          <code style={{ fontWeight: 700, letterSpacing: ".12em" }}>{league.inviteCode}</code>
+          <code style={{ fontWeight: 700, letterSpacing: ".12em" }}>{league?.inviteCode}</code>
           <button className="chip" onClick={copyInvite}>{copied ? "¡Copiado!" : "Copiar"}</button>
         </div>
       </div>

@@ -33,7 +33,7 @@ const unitLabel = (u: FieldDef["unit"]) => (u === "eur" ? "€" : u === "pct" ? 
 
 export default function LigaConfig() {
   const { leagueId, league } = useApp();
-  const isOwner = league.role === "OWNER";
+  const isOwner = league?.role === "OWNER";
   const [settings, setSettings] = useState<LeagueSettings | null>(null);
   const [form, setForm] = useState<Record<string, number>>({});
   const [crit, setCrit] = useState<Criterion[] | null>(null);
@@ -110,7 +110,7 @@ export default function LigaConfig() {
   return (
     <>
       <div className="page-head">
-        <span className="eb">{league.name}</span>
+        <span className="eb">{league?.name}</span>
         <h1>Config de liga</h1>
         <p>{isOwner ? "Ajusta las reglas de tu liga a tu gusto. Los valores por defecto son los recomendados." : "Reglas de esta liga (solo el creador puede cambiarlas)."}</p>
       </div>

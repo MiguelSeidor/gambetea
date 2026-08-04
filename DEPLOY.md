@@ -104,6 +104,16 @@ Crea un servicio desde el repo (o usa el que Railway creó) y en **Settings** po
 
 ---
 
+## Página de mantenimiento
+
+Para cortar el acceso durante una intervención planificada, en el servicio **web** pon la variable
+`MAINTENANCE=1` y reinícialo (**Deployments → Restart**): la web mostrará "Volvemos enseguida" en
+todas las rutas. Para quitarlo, borra la variable y reinicia. (Se lee en el servidor en tiempo de
+ejecución, así que **no** hace falta reconstruir.)
+
+> En un despliegue normal Railway mantiene la versión antigua sirviendo hasta que la nueva está
+> lista, así que la caída es mínima; la página de mantenimiento es para paradas a propósito.
+
 ## Notas
 
 - **Prisma client**: está gitignoreado (`generated/`), por eso el build corre `prisma generate`

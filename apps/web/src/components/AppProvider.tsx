@@ -7,7 +7,6 @@ import Icon from "@/components/Icon";
 import {
   api,
   clearSession,
-  getLeagueId,
   getToken,
   getUser,
   setLeagueId,
@@ -21,10 +20,11 @@ interface AppCtx {
   user: SessionUser;
   leagues: LeagueSummary[];
   leagueId: string;
-  league: LeagueSummary;
+  league: LeagueSummary | null; // null en modo admin (el superadmin no juega ninguna liga)
   team: TeamView | null;
   gwNumber: number | null;
   selectLeague: (id: string) => Promise<void>;
+  goToLobby: () => void;
   refresh: () => Promise<void>;
   logout: () => void;
 }
@@ -37,7 +37,7 @@ export function useApp(): AppCtx {
   return c;
 }
 
-type Phase = "loading" | "onboarding" | "ready" | "error";
+type Phase = "loading" | "lobby" | "ready" | "admin" | "error";
 
 export default function AppProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -57,24 +57,24 @@ export default function AppProvider({ children }: { children: React.ReactNode })
 
   const load = useCallback(async () => {
     try {
-      const ls = await api.myLeagues();
-      setLeagues(ls);
-      setUser(getUser());
-      if (ls.length === 0) {
-        setPhase("onboarding");
+      const u = getUser();
+      setUser(u);
+      // El superadministrador no juega ninguna liga: va directo al panel de administración.
+      if (u?.isAdmin) {
+        setLeagues(await api.myLeagues().catch(() => []));
+        setPhase("admin");
+        router.replace("/admin");
         return;
       }
-      let lid = getLeagueId() ?? "";
-      if (!ls.some((l) => l.id === lid)) lid = ls[0].id;
-      setLeagueId(lid);
-      setLid(lid);
-      await loadLeagueData(lid);
-      setPhase("ready");
+      const ls = await api.myLeagues();
+      setLeagues(ls);
+      // Usuario normal: siempre al lobby para elegir liga (entrar / crear / unirse).
+      setPhase("lobby");
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Error");
       setPhase("error");
     }
-  }, [loadLeagueData]);
+  }, [loadLeagueData, router]);
 
   useEffect(() => {
     if (!getToken()) {
@@ -99,12 +99,18 @@ export default function AppProvider({ children }: { children: React.ReactNode })
     if (leagueId) await loadLeagueData(leagueId);
   }, [leagueId, loadLeagueData]);
 
+  const goToLobby = useCallback(() => {
+    setLid("");
+    setTeam(null);
+    setPhase("lobby");
+  }, []);
+
   const logout = useCallback(() => {
     clearSession();
     router.replace("/login");
   }, [router]);
 
-  if (phase === "loading") return <FullScreen>Cargando tu equipo…</FullScreen>;
+  if (phase === "loading") return <FullScreen>Cargando…</FullScreen>;
   if (phase === "error")
     return (
       <FullScreen>
@@ -112,10 +118,10 @@ export default function AppProvider({ children }: { children: React.ReactNode })
         <button className="btn" onClick={() => location.reload()} style={{ marginTop: 16 }}><span>Reintentar</span></button>
       </FullScreen>
     );
-  if (phase === "onboarding") return <Onboarding onDone={load} />;
+  if (phase === "lobby") return <Lobby user={user} leagues={leagues} onEnter={selectLeague} onLogout={logout} />;
 
-  const league = leagues.find((l) => l.id === leagueId)!;
-  const value: AppCtx = { user: user!, leagues, leagueId, league, team, gwNumber, selectLeague, refresh, logout };
+  const league = leagues.find((l) => l.id === leagueId) ?? null;
+  const value: AppCtx = { user: user!, leagues, leagueId, league, team, gwNumber, selectLeague, goToLobby, refresh, logout };
   return (
     <Ctx.Provider value={value}>
       <Shell>{children}</Shell>
@@ -169,30 +175,42 @@ const ADMIN_GROUP = {
 
 function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const { user, team, gwNumber, leagues, leagueId, league, selectLeague, logout } = useApp();
+  const router = useRouter();
+  const { user, team, gwNumber, leagues, leagueId, league, selectLeague, goToLobby, logout } = useApp();
+  const adminMode = !league; // el superadmin no tiene liga activa
   const title = TITLES[path] ?? "Gambetea";
   const initial = (team?.name ?? user.displayName).charAt(0).toUpperCase();
-  const navGroups = user.isAdmin ? [...NAV, ADMIN_GROUP] : NAV;
+  const navGroups = adminMode ? [ADMIN_GROUP] : NAV;
+
+  // En modo admin solo tiene sentido el panel de administración.
+  useEffect(() => {
+    if (adminMode && path !== "/admin") router.replace("/admin");
+  }, [adminMode, path, router]);
 
   return (
     <div className="shell">
       <aside className="side">
-        <Link className="side-brand" href="/dashboard" aria-label="Gambetea">
+        <Link className="side-brand" href={adminMode ? "/admin" : "/dashboard"} aria-label="Gambetea">
           <img src="/brand/crest.webp" alt="" width={30} height={34} />
           <span className="wm">Gambetea</span>
         </Link>
 
-        {leagues.length > 1 && (
-          <select
-            className="league-switch"
-            value={leagueId}
-            onChange={(e) => void selectLeague(e.target.value)}
-            aria-label="Cambiar de liga"
-          >
-            {leagues.map((l) => (
-              <option key={l.id} value={l.id}>{l.name}</option>
-            ))}
-          </select>
+        {!adminMode && (
+          <>
+            {leagues.length > 1 && (
+              <select
+                className="league-switch"
+                value={leagueId}
+                onChange={(e) => void selectLeague(e.target.value)}
+                aria-label="Cambiar de liga"
+              >
+                {leagues.map((l) => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
+            )}
+            <button className="league-switch" onClick={goToLobby} style={{ textAlign: "left", cursor: "pointer" }}>← Mis ligas</button>
+          </>
         )}
 
         {navGroups.map((g) => (
@@ -224,9 +242,15 @@ function Shell({ children }: { children: React.ReactNode }) {
         <header className="topbar">
           <div className="tb-title">{title}</div>
           <div className="tb-right">
-            <div className="tb-stat"><span className="k">Liga</span><span className="v">{league.name}</span></div>
-            <div className="tb-stat"><span className="k">Saldo</span><span className="v">{team ? eur(team.budget) : "—"}</span></div>
-            <div className="tb-stat"><span className="k">Jornada</span><span className="v">{gwNumber ? `J${gwNumber}` : "—"}</span></div>
+            {adminMode ? (
+              <div className="tb-stat"><span className="k">Rol</span><span className="v">Superadmin</span></div>
+            ) : (
+              <>
+                <div className="tb-stat"><span className="k">Liga</span><span className="v">{league?.name}</span></div>
+                <div className="tb-stat"><span className="k">Saldo</span><span className="v">{team ? eur(team.budget) : "—"}</span></div>
+                <div className="tb-stat"><span className="k">Jornada</span><span className="v">{gwNumber ? `J${gwNumber}` : "—"}</span></div>
+              </>
+            )}
           </div>
         </header>
         <main className="content">{children}</main>
@@ -235,10 +259,17 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ===== Onboarding (crear / unirse a una liga) ==============================
+// ===== Lobby (entrar a tus ligas · crear · unirse) =========================
 
-function Onboarding({ onDone }: { onDone: () => Promise<void> }) {
-  const [mode, setMode] = useState<"create" | "join">("create");
+function Lobby({
+  user, leagues, onEnter, onLogout,
+}: {
+  user: SessionUser | null;
+  leagues: LeagueSummary[];
+  onEnter: (id: string) => Promise<void>;
+  onLogout: () => void;
+}) {
+  const [mode, setMode] = useState<"create" | "join">(leagues.length ? "create" : "create");
   const [name, setName] = useState("");
   const [teamName, setTeamName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
@@ -254,8 +285,7 @@ function Onboarding({ onDone }: { onDone: () => Promise<void> }) {
         mode === "create"
           ? await api.createLeague({ name, teamName: teamName || undefined })
           : await api.joinLeague({ inviteCode: inviteCode.trim().toUpperCase(), teamName: teamName || undefined });
-      setLeagueId(res.id);
-      await onDone();
+      await onEnter(res.id); // entra directamente a la liga recién creada/unida
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
       setLoading(false);
@@ -263,41 +293,60 @@ function Onboarding({ onDone }: { onDone: () => Promise<void> }) {
   }
 
   return (
-    <div className="auth-wrap">
-      <form className="auth-card" onSubmit={submit}>
-        <div className="auth-brand">
-          <img src="/brand/crest.webp" alt="" width={32} height={36} />
-          <span className="wm">Gambetea</span>
+    <div className="auth-wrap" style={{ alignItems: "flex-start", paddingTop: "6vh" }}>
+      <div className="auth-card" style={{ maxWidth: 560 }}>
+        <div className="auth-brand" style={{ justifyContent: "space-between", width: "100%" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+            <img src="/brand/crest.webp" alt="" width={32} height={36} />
+            <span className="wm">Gambetea</span>
+          </span>
+          <button className="chip" onClick={onLogout}>Salir</button>
         </div>
-        <h1>Tu primera liga</h1>
-        <p className="sub">Crea una liga privada o únete con un código de invitación.</p>
+        <h1>Hola, {user?.displayName ?? "jugador"}</h1>
+        <p className="sub">Entra a una de tus ligas, crea una nueva o únete con un código.</p>
+
+        {leagues.length > 0 && (
+          <div style={{ display: "grid", gap: 10, margin: "6px 0 20px" }}>
+            {leagues.map((l) => (
+              <button key={l.id} className="lobby-league" onClick={() => void onEnter(l.id)}>
+                <span className="ll-main">
+                  <b>{l.name}</b>
+                  <small>{l.competition} · {l.memberCount} mánager{l.memberCount === 1 ? "" : "s"} · {l.role === "OWNER" ? "creador" : "miembro"}</small>
+                </span>
+                <span className="ll-go">Entrar →</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="onb-tabs">
           <button type="button" className={mode === "create" ? "on" : ""} onClick={() => setMode("create")}>Crear liga</button>
-          <button type="button" className={mode === "join" ? "on" : ""} onClick={() => setMode("join")}>Unirme</button>
+          <button type="button" className={mode === "join" ? "on" : ""} onClick={() => setMode("join")}>Unirme por código</button>
         </div>
 
-        {mode === "create" ? (
+        <form onSubmit={submit}>
+          {mode === "create" ? (
+            <div className="field">
+              <label htmlFor="ln">Nombre de la liga</label>
+              <input id="ln" value={name} onChange={(e) => setName(e.target.value)} placeholder="Liga de los amigos" required minLength={3} />
+            </div>
+          ) : (
+            <div className="field">
+              <label htmlFor="ic">Código de invitación</label>
+              <input id="ic" value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="ABC123" required minLength={6} maxLength={6} style={{ textTransform: "uppercase" }} />
+            </div>
+          )}
           <div className="field">
-            <label htmlFor="ln">Nombre de la liga</label>
-            <input id="ln" value={name} onChange={(e) => setName(e.target.value)} placeholder="Liga de los amigos" required minLength={3} />
+            <label htmlFor="tn">Nombre de tu equipo</label>
+            <input id="tn" value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="Real Gambeta CF" />
           </div>
-        ) : (
-          <div className="field">
-            <label htmlFor="ic">Código de invitación</label>
-            <input id="ic" value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="ABC123" required minLength={6} maxLength={6} style={{ textTransform: "uppercase" }} />
-          </div>
-        )}
-        <div className="field">
-          <label htmlFor="tn">Nombre de tu equipo</label>
-          <input id="tn" value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="Real Gambeta CF" />
-        </div>
 
-        {error && <p className="auth-error">{error}</p>}
-        <button className="btn" type="submit" disabled={loading}>
-          <span>{loading ? "…" : mode === "create" ? "Crear liga" : "Unirme a la liga"}</span>
-        </button>
-      </form>
+          {error && <p className="auth-error">{error}</p>}
+          <button className="btn" type="submit" disabled={loading}>
+            <span>{loading ? "…" : mode === "create" ? "Crear y entrar" : "Unirme y entrar"}</span>
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

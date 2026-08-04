@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Anton, Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
+import Maintenance from "@/components/Maintenance";
 
 const anton = Anton({
   weight: "400",
@@ -33,7 +34,7 @@ export default function RootLayout({
         <noscript>
           <style>{`.rise{transform:none!important}.fadeup{opacity:1!important;transform:none!important}.rv{opacity:1!important;transform:none!important}`}</style>
         </noscript>
-        {children}
+        {process.env.MAINTENANCE === "1" ? <Maintenance /> : children}
       </body>
     </html>
   );

@@ -48,6 +48,13 @@ export function computeCoachValue(seasonPoints: number): number {
   return Math.max(MIN_VALUE, COACH_BASE_VALUE + seasonPoints * COACH_POINTS_VALUE_FACTOR);
 }
 
+/** Valor de un entrenador según la FUERZA de su equipo (rating medio de su plantilla) + puntos.
+ *  Diferencia a un técnico de un equipo grande de uno que pelea por no descender. */
+export function coachValueFromStrength(avgTeamRating: number, seasonPoints: number): number {
+  const base = Math.max(1_000_000, COACH_BASE_VALUE + Math.round((avgTeamRating - 70) * 300_000));
+  return Math.max(MIN_VALUE, base + seasonPoints * COACH_POINTS_VALUE_FACTOR);
+}
+
 // --- Préstamos (ADR-012 · hipoteca francesa) --------------------------------
 export const LOAN_RATE_TAE = 0.05; // 5% TAE
 export const MAX_LOANS = 3; // máximo de préstamos activos por equipo

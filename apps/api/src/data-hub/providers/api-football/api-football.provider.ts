@@ -20,7 +20,6 @@ import {
 } from "../../provider.port";
 
 const BASE = "https://v3.football.api-sports.io";
-const DEFAULT_RATING = 70; // API-Football no da rating de calidad tipo FIFA (ADR-019).
 
 interface ApiEnvelope<T> {
   errors: unknown;
@@ -102,8 +101,8 @@ export class ApiFootballProvider implements FootballDataProvider {
     do {
       const env = await this.envelope<ApiSeasonPlayer[]>(`players?team=${teamExternalId}&season=${this.season}&page=${page}`);
       for (const item of env.response) {
-        const pos = item.statistics?.[0]?.games?.position;
-        out.push({ externalId: String(item.player.id), teamExternalId, name: item.player.name, position: mapPosition(pos), rating: DEFAULT_RATING });
+        const g = item.statistics?.[0]?.games;
+        out.push({ externalId: String(item.player.id), teamExternalId, name: item.player.name, position: mapPosition(g?.position), rating: ratingFromSeasonAvg(g?.rating) });
       }
       total = Math.min(env.paging?.total ?? 1, MAX_PAGES);
       page++;
@@ -200,7 +199,14 @@ interface ApiTeamPlayers {
 }
 interface ApiSeasonPlayer {
   player: { id: number; name: string };
-  statistics: { games?: { position?: string | null } }[];
+  statistics: { games?: { position?: string | null; rating?: string | null } }[];
+}
+
+// Nota media de la temporada (≈6.0 flojo … 7.6 élite) → rating interno 55-94 (base del valor).
+function ratingFromSeasonAvg(avg: string | null | undefined): number {
+  const r = Number(avg);
+  if (!Number.isFinite(r) || r <= 0) return 62; // sin nota (pocos minutos): valor modesto
+  return Math.max(55, Math.min(94, Math.round(58 + (r - 6.0) * 21.5)));
 }
 
 function mapEventKind(e: ApiEvent): MatchEventKind | null {

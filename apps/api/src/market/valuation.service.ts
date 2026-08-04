@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { computeCoachValue, computeValue } from "./economy.rules";
+import { coachValueFromStrength, computeValue } from "./economy.rules";
 
 @Injectable()
 export class ValuationService {
@@ -19,8 +19,16 @@ export class ValuationService {
     const teamIds = [...new Set(matches.flatMap((m) => [m.homeTeamId, m.awayTeamId]))];
     const players = await this.prisma.player.findMany({
       where: { teamId: { in: teamIds } },
-      select: { id: true, rating: true },
+      select: { id: true, rating: true, teamId: true },
     });
+    // Rating medio por equipo (fuerza de plantilla) → valor base del entrenador.
+    const teamRatings = new Map<string, number[]>();
+    for (const p of players) {
+      if (!p.teamId) continue;
+      (teamRatings.get(p.teamId) ?? teamRatings.set(p.teamId, []).get(p.teamId)!).push(p.rating);
+    }
+    const teamAvgRating = new Map<string, number>();
+    for (const [tid, rs] of teamRatings) teamAvgRating.set(tid, rs.reduce((a, b) => a + b, 0) / rs.length);
 
     // Puntos de temporada por jugador (suma de PlayerGameweekScore de la temporada).
     const grouped = await this.prisma.playerGameweekScore.groupBy({
@@ -36,8 +44,8 @@ export class ValuationService {
       players.map((p) => [p.id, computeValue(p.rating, pointsOf.get(p.id) ?? 0)]),
     );
 
-    // Entrenadores de la temporada: valor = base + puntos_temporada × factor.
-    const coaches = await this.prisma.coach.findMany({ where: { teamId: { in: teamIds } }, select: { id: true } });
+    // Entrenadores: valor = base por FUERZA de su equipo (rating medio) + puntos × factor.
+    const coaches = await this.prisma.coach.findMany({ where: { teamId: { in: teamIds } }, select: { id: true, teamId: true } });
     const coachGrouped = await this.prisma.coachGameweekScore.groupBy({
       by: ["coachId"],
       where: { gameweek: { seasonId } },
@@ -46,7 +54,7 @@ export class ValuationService {
     const coachPointsOf = new Map(coachGrouped.map((g) => [g.coachId, g._sum.points ?? 0]));
     await this.bulkUpdateValues(
       "Coach",
-      coaches.map((c) => [c.id, computeCoachValue(coachPointsOf.get(c.id) ?? 0)]),
+      coaches.map((c) => [c.id, coachValueFromStrength(c.teamId ? (teamAvgRating.get(c.teamId) ?? 70) : 70, coachPointsOf.get(c.id) ?? 0)]),
     );
     return players.length;
   }

@@ -37,21 +37,47 @@ function mapPosition(raw: string | null | undefined): ProviderPosition {
   return "FWD"; // Attacker / F / desconocido
 }
 
+const MIN_INTERVAL_MS = 6500; // plan free: 10 req/min → ~1 cada 6s (dejamos margen)
+
 export class ApiFootballProvider implements FootballDataProvider {
   readonly name = "api-football";
-  private readonly key = process.env.APIFOOTBALL_KEY ?? "";
-  private readonly league = Number(process.env.APIFOOTBALL_LEAGUE ?? "140"); // LaLiga
-  private readonly season = Number(process.env.APIFOOTBALL_SEASON ?? "2023");
+  private readonly key = (process.env.APIFOOTBALL_KEY ?? "").trim();
+  private readonly league = Number((process.env.APIFOOTBALL_LEAGUE ?? "140").trim());
+  private readonly season = Number((process.env.APIFOOTBALL_SEASON ?? "2023").trim());
+  // Cola serializada para respetar el límite de 10 peticiones/minuto del plan free.
+  private throttleChain: Promise<void> = Promise.resolve();
+  private lastCallAt = 0;
+
+  private async throttle(): Promise<void> {
+    this.throttleChain = this.throttleChain.then(async () => {
+      const wait = Math.max(0, MIN_INTERVAL_MS - (Date.now() - this.lastCallAt));
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      this.lastCallAt = Date.now();
+    });
+    return this.throttleChain;
+  }
+
+  private async envelope<T>(path: string): Promise<ApiEnvelope<T>> {
+    if (!this.key) throw new Error("Falta APIFOOTBALL_KEY en el entorno");
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await this.throttle();
+      const res = await fetch(`${BASE}/${path}`, { headers: { "x-apisports-key": this.key } });
+      if (res.status === 429) {
+        await new Promise((r) => setTimeout(r, 61_000)); // rate limit: esperar y reintentar
+        continue;
+      }
+      if (!res.ok) throw new Error(`api-football ${path} → HTTP ${res.status}`);
+      const body = (await res.json()) as ApiEnvelope<T>;
+      if (body.errors && !Array.isArray(body.errors) && Object.keys(body.errors as object).length > 0) {
+        throw new Error(`api-football ${path} → ${JSON.stringify(body.errors)}`);
+      }
+      return body;
+    }
+    throw new Error(`api-football ${path} → límite de peticiones (429) persistente`);
+  }
 
   private async call<T>(path: string): Promise<T> {
-    if (!this.key) throw new Error("Falta APIFOOTBALL_KEY en el entorno");
-    const res = await fetch(`${BASE}/${path}`, { headers: { "x-apisports-key": this.key } });
-    if (!res.ok) throw new Error(`api-football ${path} → HTTP ${res.status}`);
-    const body = (await res.json()) as ApiEnvelope<T>;
-    if (body.errors && !Array.isArray(body.errors) && Object.keys(body.errors as object).length > 0) {
-      throw new Error(`api-football ${path} → ${JSON.stringify(body.errors)}`);
-    }
-    return body.response;
+    return (await this.envelope<T>(path)).response;
   }
 
   async getCompetition(): Promise<ProviderCompetition> {
@@ -67,16 +93,20 @@ export class ApiFootballProvider implements FootballDataProvider {
   }
 
   async getSquad(teamExternalId: string): Promise<ProviderPlayer[]> {
-    // players/squads = squad actual (1 req/equipo). Aproximación al de la temporada (ADR-019).
-    const resp = await this.call<{ players: { id: number; name: string; position: string }[] }[]>(`players/squads?team=${teamExternalId}`);
-    const players = resp[0]?.players ?? [];
-    return players.map((p) => ({
-      externalId: String(p.id),
-      teamExternalId,
-      name: p.name,
-      position: mapPosition(p.position),
-      rating: DEFAULT_RATING,
-    }));
+    // Plantilla REAL de la temporada (no la actual): `players?team&season`, paginado.
+    const out: ProviderPlayer[] = [];
+    let page = 1;
+    let total = 1;
+    do {
+      const env = await this.envelope<ApiSeasonPlayer[]>(`players?team=${teamExternalId}&season=${this.season}&page=${page}`);
+      for (const item of env.response) {
+        const pos = item.statistics?.[0]?.games?.position;
+        out.push({ externalId: String(item.player.id), teamExternalId, name: item.player.name, position: mapPosition(pos), rating: DEFAULT_RATING });
+      }
+      total = env.paging?.total ?? 1;
+      page++;
+    } while (page <= total);
+    return out;
   }
 
   async getCoaches(): Promise<ProviderCoach[]> {
@@ -165,6 +195,10 @@ interface ApiPlayerStat {
 }
 interface ApiTeamPlayers {
   players: { player: { id: number; name: string }; statistics: ApiPlayerStat[] }[];
+}
+interface ApiSeasonPlayer {
+  player: { id: number; name: string };
+  statistics: { games?: { position?: string | null } }[];
 }
 
 function mapEventKind(e: ApiEvent): MatchEventKind | null {

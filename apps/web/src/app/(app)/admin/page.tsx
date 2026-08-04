@@ -119,28 +119,29 @@ export default function AdminPanel() {
             {" · "}{hubStatus.teams} equipos · {hubStatus.players} jugadores · {hubStatus.coaches} DT · jornadas {hubStatus.gameweeksPlayed}/{hubStatus.gameweeks}
           </p>
         )}
+        {hubStatus?.job && (
+          <p style={{ fontSize: ".82rem", margin: "0 0 8px", color: hubStatus.job.status === "error" ? "#f87171" : hubStatus.job.status === "running" ? "var(--accent)" : "#4ade80" }}>
+            Tarea «{hubStatus.job.name}»: <b>{hubStatus.job.status === "running" ? "en curso…" : hubStatus.job.status === "done" ? "completada" : "error"}</b>
+            {hubStatus.job.status !== "running" && <span className="muted"> · {hubStatus.job.message}</span>}
+            {" "}<button className="chip" onClick={() => void loadOverview()}>Refrescar</button>
+          </p>
+        )}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <button className="btn-sm ghost" disabled={busy} style={{ borderColor: "#f87171", color: "#f87171" }}
             onClick={() => setResetOpen(true)}>Inicializar (borrar todo)</button>
           <button className="btn-sm" disabled={busy}
-            onClick={() => run(async () => { await api.adminHubBackfill(); await loadOverview(); }, "Hub rellenado desde el proveedor")}>Rellenar desde API</button>
+            onClick={() => run(async () => { await api.adminHubBackfill(); await loadOverview(); }, "Rellenado iniciado en segundo plano")}>Rellenar desde API</button>
           <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
             <input type="number" min={1} max={5} value={playCount} className="ins-select" style={{ width: 56, margin: 0 }}
               onChange={(e) => setPlayCount(Number(e.target.value))} />
             <button className="btn-sm ghost" disabled={busy}
-              onClick={() => run(async () => { const r = await api.adminHubPlay(playCount); await loadOverview(); notify(`Jugadas ${r.played.length} jornada(s)`, true); }, "Jornadas jugadas")}>Jugar jornadas</button>
+              onClick={() => run(async () => { await api.adminHubPlay(playCount); await loadOverview(); }, "Jornadas iniciadas en segundo plano")}>Jugar jornadas</button>
           </span>
           <button className="btn-sm ghost" disabled={busy}
-            onClick={() => run(async () => {
-              const r = await api.adminHubSyncChanges();
-              await loadOverview();
-              const base = r.total === 0 ? "Sin cambios en el proveedor" : `${r.newPlayers} altas · ${r.clubChanges} club · ${r.positionChanges} posición`;
-              const baj = r.departed.length ? ` · A REVISAR (${r.departed.length} posibles bajas): ${r.departed.map((d) => d.name).slice(0, 8).join(", ")}${r.departed.length > 8 ? "…" : ""}` : "";
-              notify(base + baj, true);
-            }, "Comprobación completada")}>Comprobar cambios</button>
+            onClick={() => run(async () => { await api.adminHubSyncChanges(); await loadOverview(); }, "Comprobación iniciada en segundo plano")}>Comprobar cambios</button>
         </div>
         <p className="muted" style={{ fontSize: ".76rem", marginTop: 10 }}>
-          «Inicializar» borra equipos, jugadores, ligas fantasy y partidos (las cuentas de usuario se conservan). «Rellenar» pide los datos al proveedor activo. «Jugar jornadas» ingiere y puntúa las siguientes.
+          «Inicializar» borra equipos, jugadores, ligas fantasy y partidos (las cuentas de usuario se conservan). Las demás tareas corren <b>en segundo plano</b> (con api-football tardan minutos por el límite de peticiones): pulsa <b>Refrescar</b> para ver el progreso y los recuentos.
         </p>
       </div>
 

@@ -325,6 +325,7 @@ export interface HubStatus {
   coaches: number;
   gameweeks: number;
   gameweeksPlayed: number;
+  job: { name: string; status: "running" | "done" | "error"; message: string; at: string } | null;
 }
 export interface AdminAuditRow {
   id: string;
@@ -452,9 +453,9 @@ export const api = {
     request<{ position: string }>(`/admin/players/${playerId}/position`, { method: "POST", body: { position } }),
   adminHubStatus: () => request<HubStatus>("/admin/hub/status"),
   adminHubReset: () => request<{ truncated: number }>("/admin/hub/reset", { method: "POST" }),
-  adminHubBackfill: () => request<{ provider: string; teams: number; players: number; coaches: number; gameweeks: number; matches: number }>("/admin/hub/backfill", { method: "POST" }),
-  adminHubPlay: (count: number) => request<{ played: { matchday: number; matches: number; events: number; playersScored: number }[] }>("/admin/hub/play", { method: "POST", body: { count } }),
-  adminHubSyncChanges: () => request<{ total: number; newPlayers: number; clubChanges: number; positionChanges: number; departures: number; errors: number; departed: { playerId: string; name: string }[] }>("/admin/hub/sync-changes", { method: "POST" }),
+  adminHubBackfill: () => request<{ started: boolean; job: string }>("/admin/hub/backfill", { method: "POST" }),
+  adminHubPlay: (count: number) => request<{ started: boolean; job: string }>("/admin/hub/play", { method: "POST", body: { count } }),
+  adminHubSyncChanges: () => request<{ started: boolean; job: string }>("/admin/hub/sync-changes", { method: "POST" }),
   adminResetRequests: () => request<ResetRequest[]>("/admin/reset-requests"),
   adminApproveReset: (id: string) => request<{ ok: boolean; tempPassword: string }>(`/admin/reset-requests/${id}/approve`, { method: "POST" }),
   adminRejectReset: (id: string) => request<{ ok: boolean }>(`/admin/reset-requests/${id}/reject`, { method: "POST" }),

@@ -24,6 +24,19 @@ export class AdminService {
     private readonly hubSync: HubSyncService,
   ) {}
 
+  // Estado de la última tarea larga del Hub (backfill/play/sync). En memoria: el admin lo consulta.
+  private hubJob: { name: string; status: "running" | "done" | "error"; message: string; at: string } | null = null;
+
+  /** Lanza una tarea larga en segundo plano (no bloquea la respuesta HTTP; el admin ve el estado). */
+  private startJob(name: string, fn: () => Promise<unknown>) {
+    if (this.hubJob?.status === "running") throw new BadRequestException(`Ya hay una tarea en curso: ${this.hubJob.name}`);
+    this.hubJob = { name, status: "running", message: "En curso…", at: new Date().toISOString() };
+    void fn()
+      .then((r) => { this.hubJob = { name, status: "done", message: JSON.stringify(r ?? {}).slice(0, 400), at: new Date().toISOString() }; })
+      .catch((e) => { this.hubJob = { name, status: "error", message: (e as Error).message, at: new Date().toISOString() }; });
+    return { started: true, job: name };
+  }
+
   private audit(adminId: string, action: string, target: string | null, detail: unknown) {
     return this.prisma.adminAction.create({
       data: { adminId, action, target, detail: (detail ?? {}) as object },
@@ -267,10 +280,11 @@ export class AdminService {
       this.prisma.season.findFirst({ where: { current: true }, select: { name: true } }),
     ]);
     return {
-      provider: process.env.DATA_PROVIDER ?? "mock",
+      provider: (process.env.DATA_PROVIDER ?? "mock").trim(),
       season: season?.name ?? null,
       apiSeason: process.env.APIFOOTBALL_SEASON ?? null,
       teams, players, coaches, gameweeks, gameweeksPlayed: played,
+      job: this.hubJob,
     };
   }
 
@@ -286,12 +300,15 @@ export class AdminService {
     return { truncated: rows.length };
   }
 
-  /** RELLENAR el Hub desde el proveedor activo (mock o api-football). Idempotente. */
-  async hubBackfill(adminId: string) {
-    const provider = createProvider();
-    const summary = await runBackfill(this.prisma, provider);
-    await this.audit(adminId, "hub.backfill", null, { provider: provider.name, ...summary });
-    return { provider: provider.name, ...summary };
+  /** RELLENAR el Hub desde el proveedor activo. En segundo plano (con api-football tarda por el
+   *  límite de 10 req/min); el admin ve el progreso en el estado del Hub. Idempotente. */
+  hubBackfill(adminId: string) {
+    return this.startJob("backfill", async () => {
+      const provider = createProvider();
+      const summary = await runBackfill(this.prisma, provider);
+      await this.audit(adminId, "hub.backfill", null, { provider: provider.name, ...summary });
+      return { provider: provider.name, ...summary };
+    });
   }
 
   // === Solicitudes de reseteo de contraseña (aprobación del admin) ==============
@@ -328,29 +345,29 @@ export class AdminService {
     return { ok: true };
   }
 
-  /** Comprueba cambios en el proveedor (altas, club, posición, bajas) y actualiza el Hub. */
-  async hubSyncChanges(adminId: string) {
-    const r = await this.hubSync.detectChanges();
-    await this.audit(adminId, "hub.syncChanges", null, r);
-    return r;
+  /** Comprueba cambios en el proveedor (altas, club, posición, bajas). En segundo plano. */
+  hubSyncChanges(adminId: string) {
+    return this.startJob("sync-changes", async () => {
+      const r = await this.hubSync.detectChanges();
+      await this.audit(adminId, "hub.syncChanges", null, r);
+      return r;
+    });
   }
 
-  /** Juega (ingiere + puntúa) las próximas `count` jornadas con datos del proveedor. */
-  async hubPlay(adminId: string, count: number) {
-    const provider = createProvider();
-    const n = Math.max(1, Math.min(5, Math.round(count || 1))); // tope prudente por presupuesto de API
-    const pending = await this.prisma.gameweek.findMany({
-      where: { status: { not: "FINISHED" } },
-      orderBy: { number: "asc" },
-      take: n,
+  /** Juega (ingiere + puntúa) las próximas `count` jornadas. En segundo plano. */
+  hubPlay(adminId: string, count: number) {
+    const n = Math.max(1, Math.min(5, Math.round(count || 1)));
+    return this.startJob("play", async () => {
+      const provider = createProvider();
+      const pending = await this.prisma.gameweek.findMany({ where: { status: { not: "FINISHED" } }, orderBy: { number: "asc" }, take: n });
+      let scoredTotal = 0;
+      for (const gw of pending) {
+        await playGameweekRecord(this.prisma, provider, gw);
+        const scored = await this.scoring.computeGameweek(gw.id);
+        scoredTotal += scored.playersScored;
+      }
+      await this.audit(adminId, "hub.play", null, { count: pending.length });
+      return { playedGameweeks: pending.length, playersScored: scoredTotal };
     });
-    const played: { matchday: number; matches: number; events: number; playersScored: number }[] = [];
-    for (const gw of pending) {
-      const r = await playGameweekRecord(this.prisma, provider, gw); // ingiere partidos reales
-      const scored = await this.scoring.computeGameweek(gw.id); // puntúa con el baremo
-      played.push({ matchday: r.matchday, matches: r.matches, events: r.events, playersScored: scored.playersScored });
-    }
-    await this.audit(adminId, "hub.play", null, { count: played.length });
-    return { played };
   }
 }

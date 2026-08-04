@@ -94,6 +94,8 @@ export class ApiFootballProvider implements FootballDataProvider {
 
   async getSquad(teamExternalId: string): Promise<ProviderPlayer[]> {
     // Plantilla REAL de la temporada (no la actual): `players?team&season`, paginado.
+    // El plan FREE limita el parámetro `page` a un máximo de 3 (≈60 jugadores, de sobra).
+    const MAX_PAGES = 3;
     const out: ProviderPlayer[] = [];
     let page = 1;
     let total = 1;
@@ -103,7 +105,7 @@ export class ApiFootballProvider implements FootballDataProvider {
         const pos = item.statistics?.[0]?.games?.position;
         out.push({ externalId: String(item.player.id), teamExternalId, name: item.player.name, position: mapPosition(pos), rating: DEFAULT_RATING });
       }
-      total = env.paging?.total ?? 1;
+      total = Math.min(env.paging?.total ?? 1, MAX_PAGES);
       page++;
     } while (page <= total);
     return out;

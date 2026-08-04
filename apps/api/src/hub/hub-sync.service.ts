@@ -21,7 +21,8 @@ export class HubSyncService {
     const season = await this.prisma.season.findFirst({ where: { current: true }, select: { id: true } });
     if (!season) throw new BadRequestException("No hay temporada activa. Rellena el Hub primero.");
 
-    const changes = { newPlayers: 0, clubChanges: 0, positionChanges: 0, departures: 0, errors: 0 };
+    const changes = { newPlayers: 0, clubChanges: 0, positionChanges: 0, errors: 0 };
+    const departed: { playerId: string; name: string }[] = []; // se REPORTAN, no se aplican solas
 
     // --- Equipos: mapa externalId -> internalId (crea el equipo si es nuevo) ---
     const teams = await provider.getTeams();
@@ -50,7 +51,7 @@ export class HubSyncService {
     const teamIntIds = [...teamExtToInt.values()];
     const ourPlayers = await this.prisma.player.findMany({
       where: { teamId: { in: teamIntIds }, status: "ACTIVE" },
-      select: { id: true, position: true, teamId: true },
+      select: { id: true, name: true, position: true, teamId: true },
     });
     const ourById = new Map(ourPlayers.map((p) => [p.id, p]));
 
@@ -83,23 +84,15 @@ export class HubSyncService {
     }
 
     // --- 2) Bajas: jugadores nuestros (activos) que ya no están en ningún squad ---
+    // NO se aplican solas (pagan cláusula / quitan jugadores + ambigüedad traspaso vs jubilación):
+    // se REPORTAN para que el admin confirme cada una con los botones "traspaso fuera" / "retirar".
     for (const our of ourPlayers) {
       const ext = playerIntToExt.get(our.id);
-      if (ext && !fetched.has(ext)) {
-        try {
-          // Por defecto se trata como traspaso a otra liga (compensa cláusula, lo más justo para el
-          // mánager). La jubilación exacta se puede afinar con el endpoint de traspasos (ver ADR-018).
-          await this.lifecycle.transferOut(our.id);
-          changes.departures++;
-        } catch (e) {
-          changes.errors++;
-          this.log.warn(`Baja no aplicada para ${our.id}: ${(e as Error).message}`);
-        }
-      }
+      if (ext && !fetched.has(ext)) departed.push({ playerId: our.id, name: our.name });
     }
 
-    const total = changes.newPlayers + changes.clubChanges + changes.positionChanges + changes.departures;
-    this.log.log(`Diff del Hub (${provider.name}): ${total} cambios ${JSON.stringify(changes)}`);
-    return { provider: provider.name, total, ...changes };
+    const total = changes.newPlayers + changes.clubChanges + changes.positionChanges + departed.length;
+    this.log.log(`Diff del Hub (${provider.name}): ${total} cambios; bajas a revisar: ${departed.length}`);
+    return { provider: provider.name, total, ...changes, departures: departed.length, departed };
   }
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/components/AppProvider";
 import Modal from "@/components/Modal";
-import { api, type AdminOverview, type AdminTeamDetail, type HubStatus, type PlayerPos, type ResetRequest } from "@/lib/api";
+import { api, POS_SHORT, type AdminOverview, type AdminTeamDetail, type HubStatus, type PlayerPos, type ResetRequest } from "@/lib/api";
 
 const eur = (n: number) => new Intl.NumberFormat("es-ES").format(n) + " €";
 const POSITIONS: PlayerPos[] = ["GK", "DEF", "MID", "FWD"];
@@ -323,7 +323,7 @@ function PlayerRow({
   return (
     <tr>
       <td>{p.name}</td>
-      <td>{p.position}</td>
+      <td>{POS_SHORT[p.position]}</td>
       <td style={{ textAlign: "right" }}>
         <input type="number" value={rating} className="ins-select" style={{ width: 64, textAlign: "right", margin: 0 }}
           onChange={(e) => setRating(Number(e.target.value))} />
@@ -350,7 +350,7 @@ function PlayerRow({
         <select value={p.position} className="ins-select" style={{ margin: 0, width: 66 }} disabled={busy}
           title="Cambiar posición"
           onChange={(e) => run(async () => { await api.adminChangePosition(p.playerId, e.target.value); await reload(); }, "Posición cambiada")}>
-          {POSITIONS.map((pos) => <option key={pos} value={pos}>{pos}</option>)}
+          {POSITIONS.map((pos) => <option key={pos} value={pos}>{POS_SHORT[pos]}</option>)}
         </select>
         <button className="chip" style={{ marginLeft: 6 }} disabled={busy} title="Ficha por otra liga (compensa cláusula)" onClick={() => onHub("transferOut")}>✈️ Fuera</button>
         <button className="chip" style={{ marginLeft: 6 }} disabled={busy} title="Se retira (sin compensación)" onClick={() => onHub("retire")}>🎬 Retira</button>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/components/AppProvider";
-import { api, type FantasyRules, type LineupView, type PlayerPos, type RosterPlayer } from "@/lib/api";
+import { api, POS_SHORT, type FantasyRules, type LineupView, type PlayerPos, type RosterPlayer } from "@/lib/api";
 
 const POS_ORDER: PlayerPos[] = ["GK", "DEF", "MID", "FWD"];
 const POS_LABEL: Record<PlayerPos, string> = { GK: "Portero", DEF: "Defensas", MID: "Medios", FWD: "Delanteros" };
@@ -177,7 +177,7 @@ export default function Alineacion() {
             <div className="gh"><span className="lab">Banquillo (1)</span></div>
             <select value={benchId} onChange={(e) => setBenchId(e.target.value)} disabled={!editable} style={{ width: "100%" }} className="save-bar-select">
               <option value="">Sin suplente</option>
-              {benchOptions.map((p) => <option key={p.id} value={p.id}>{p.position} · {p.name}</option>)}
+              {benchOptions.map((p) => <option key={p.id} value={p.id}>{POS_SHORT[p.position]} · {p.name}</option>)}
             </select>
           </div>
 

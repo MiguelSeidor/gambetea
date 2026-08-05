@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/components/AppProvider";
-import { api, type LeaguePlayer, type MarketListing, type PlayerPos, type TransactionRow } from "@/lib/api";
+import { api, POS_SHORT, type LeaguePlayer, type MarketListing, type PlayerPos, type TransactionRow } from "@/lib/api";
 import { eur } from "@/lib/format";
 
 type Tab = "free" | "league" | "activity";
 type PosFilter = PlayerPos | "ALL" | "DT";
 const POS_FREE: PosFilter[] = ["ALL", "GK", "DEF", "MID", "FWD", "DT"];
 const POS_LEAGUE: PosFilter[] = ["ALL", "GK", "DEF", "MID", "FWD"];
-const POS_LABEL: Record<string, string> = { ALL: "Todas", GK: "POR", DEF: "DEF", MID: "MED", FWD: "DEL", DT: "DT (entrenadores)" };
+const POS_LABEL: Record<string, string> = { ALL: "Todas", GK: "POR", DEF: "DEF", MID: "CEN", FWD: "DEL", DT: "ENT (entrenadores)" };
 
 // Etiquetas legibles para el desglose de "Mi actividad".
 const TX_LABEL: Record<TransactionRow["type"], string> = {
@@ -148,7 +148,7 @@ export default function Mercado() {
             return (
               <div className="card" key={l.listingId}>
                 <div className="card-head">
-                  <span className={`pos ${isCoach ? "MID" : l.asset.position}`}>{isCoach ? "DT" : l.asset.position}</span>
+                  <span className={`pos ${isCoach ? "DT" : l.asset.position}`}>{isCoach || !l.asset.position ? "ENT" : POS_SHORT[l.asset.position]}</span>
                   <span className="badge fit">{isCoach ? "Entrenador" : "Libre"}</span>
                 </div>
                 <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>{l.asset.name}<Status p={l.asset} /></div>
@@ -182,7 +182,7 @@ export default function Mercado() {
             <tbody>
               {filteredPlayers.map((p) => (
                 <tr key={p.playerId} className={p.mine ? "you" : ""}>
-                  <td><span className={`pos ${p.position}`}>{p.position}</span></td>
+                  <td><span className={`pos ${p.position}`}>{POS_SHORT[p.position]}</span></td>
                   <td><strong>{p.name}</strong><Status p={p} /> <span className="muted" style={{ fontSize: ".8rem" }}>· {p.club ?? "—"}</span>
                     {p.listed && <span className="badge fit" style={{ marginLeft: 6 }}>En venta {p.askingPrice != null ? eur(p.askingPrice) : ""}</span>}
                   </td>

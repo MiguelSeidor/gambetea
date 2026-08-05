@@ -104,6 +104,10 @@ export interface LeagueDetail {
   members: { userId: string; displayName: string; role: string; teamName: string | null; joinedAt: string }[];
 }
 export type PlayerPos = "GK" | "DEF" | "MID" | "FWD";
+/** Etiqueta corta en español para la posición (badge). El código interno (GK/DEF/MID/FWD) se
+ *  mantiene como clase CSS para el color; esto es sólo el texto visible. Entrenador → "ENT". */
+export const POS_SHORT: Record<PlayerPos, string> = { GK: "POR", DEF: "DEF", MID: "CEN", FWD: "DEL" };
+export const COACH_SHORT = "ENT";
 export interface RosterPlayer {
   id: string;
   name: string;

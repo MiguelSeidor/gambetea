@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/components/AppProvider";
 import Modal from "@/components/Modal";
 import { eur } from "@/lib/format";
-import { api, type InsuranceTier, type PlayerPos, type RosterPlayer } from "@/lib/api";
+import { api, POS_SHORT, type InsuranceTier, type PlayerPos, type RosterPlayer } from "@/lib/api";
 
 const ORDER: PlayerPos[] = ["GK", "DEF", "MID", "FWD"];
 const LABEL: Record<PlayerPos, string> = { GK: "Porteros", DEF: "Defensas", MID: "Centrocampistas", FWD: "Delanteros" };
@@ -79,7 +79,7 @@ export default function Plantilla() {
               </div>
               {players.map((p) => (
                 <div className="prow" key={p.id}>
-                  <span className={`pos ${p.position}`}>{p.position}</span>
+                  <span className={`pos ${p.position}`}>{POS_SHORT[p.position]}</span>
                   <span className="nm" style={{ flex: 1, minWidth: 0 }}>
                     {p.name}
                     {p.injured && <span title="Lesionado" style={{ marginLeft: 6 }}>🩹</span>}
@@ -112,7 +112,7 @@ export default function Plantilla() {
           </div>
           {team.coaches.map((c) => (
             <div className="prow" key={c.id}>
-              <span className="pos MID">DT</span>
+              <span className="pos DT">ENT</span>
               <span className="nm" style={{ flex: 1, minWidth: 0 }}>{c.name}<small>{c.club ?? "—"} · {eur(c.value)}</small></span>
               <span className="pts-col">{c.points}<small>pts</small></span>
             </div>

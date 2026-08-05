@@ -43,9 +43,13 @@ export class ApiFootballProvider implements FootballDataProvider {
   private readonly key = (process.env.APIFOOTBALL_KEY ?? "").trim();
   private readonly league = Number((process.env.APIFOOTBALL_LEAGUE ?? "140").trim());
   private readonly season = Number((process.env.APIFOOTBALL_SEASON ?? "2023").trim());
-  // Nº de páginas de plantilla a pedir por equipo (plan free: máx 3). Menos páginas = menos
-  // peticiones del presupuesto diario (100/día). 2 páginas ≈ 40 jugadores, de sobra para el pool.
-  private readonly squadPages = Math.max(1, Math.min(3, Number((process.env.APIFOOTBALL_SQUAD_PAGES ?? "2").trim()) || 2));
+  // Nº de páginas de plantilla a pedir por equipo. El plan FREE limita `page` a 3 (≈60 jugadores),
+  // que es TODA la plantilla disponible: las pedimos enteras para no dejarnos a nadie fuera y luego
+  // ordenar por calidad. En un plan de pago se puede subir con APIFOOTBALL_SQUAD_PAGES.
+  private readonly squadPages = Math.max(1, Number((process.env.APIFOOTBALL_SQUAD_PAGES ?? "3").trim()) || 3);
+  // Tamaño del pool por equipo: nos quedamos con los N MEJORES por calidad. 40 para pruebas; en vivo
+  // se pone APIFOOTBALL_SQUAD_LIMIT=0 → sin recorte (todos los jugadores).
+  private readonly squadLimit = Math.max(0, Number((process.env.APIFOOTBALL_SQUAD_LIMIT ?? "40").trim()) || 0);
   // Cola serializada para respetar el límite de 10 peticiones/minuto del plan free.
   private throttleChain: Promise<void> = Promise.resolve();
   private lastCallAt = 0;
@@ -110,7 +114,10 @@ export class ApiFootballProvider implements FootballDataProvider {
       total = Math.min(env.paging?.total ?? 1, this.squadPages);
       page++;
     } while (page <= total);
-    return out;
+    // Ordenamos por CALIDAD (mejores primero) y recortamos al pool, para no dejarnos a un crack
+    // que caiga en la 2ª/3ª página. squadLimit = 0 → nos quedamos con todos (modo "en vivo").
+    out.sort((a, b) => b.rating - a.rating);
+    return this.squadLimit > 0 ? out.slice(0, this.squadLimit) : out;
   }
 
   async getCoaches(teamExternalIds?: string[]): Promise<ProviderCoach[]> {

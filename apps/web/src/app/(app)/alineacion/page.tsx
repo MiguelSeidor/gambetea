@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/components/AppProvider";
 import { api, POS_SHORT, type FantasyRules, type LineupView, type PlayerPos, type RosterPlayer } from "@/lib/api";
+import TeamCrest from "@/components/TeamCrest";
 
 const POS_ORDER: PlayerPos[] = ["GK", "DEF", "MID", "FWD"];
 const POS_LABEL: Record<PlayerPos, string> = { GK: "Portero", DEF: "Defensas", MID: "Medios", FWD: "Delanteros" };
@@ -157,7 +158,7 @@ export default function Alineacion() {
                 {team.players.filter((p) => p.position === pos).map((p) => (
                   <span key={p.id} className={`chip${starters.includes(p.id) ? " on" : ""}`} onClick={() => toggle(p)}
                     title={`${p.points} pts${p.injured ? " · lesionado" : ""}${p.suspended ? " · sancionado" : ""}`}>
-                    {p.injured && "🩹 "}{p.suspended && "🟥 "}{p.name}<small>{p.club ?? ""} · {p.points} pts</small>
+                    {p.injured && "🩹 "}{p.suspended && "🟥 "}{p.name}<small><TeamCrest teamId={p.teamId} name={p.clubName} short={p.club} size={14} /> · {p.points} pts</small>
                     {captainId === p.id && <span className="cap">C</span>}
                   </span>
                 ))}

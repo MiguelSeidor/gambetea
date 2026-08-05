@@ -53,8 +53,10 @@ export async function backfill(
   const teamId = new Map<string, string>(); // externalId -> internalId
   for (const t of teams) {
     const id = await mapOrCreate("team", t.externalId, () =>
-      prisma.team.create({ data: { name: t.name, shortName: t.shortName } }),
+      prisma.team.create({ data: { name: t.name, shortName: t.shortName, crestUrl: t.crestUrl ?? null } }),
     );
+    // Refresca el escudo también en equipos ya existentes (p. ej. si antes no se capturó).
+    if (t.crestUrl) await prisma.team.update({ where: { id }, data: { crestUrl: t.crestUrl } });
     teamId.set(t.externalId, id);
   }
 

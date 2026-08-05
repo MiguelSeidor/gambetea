@@ -3,6 +3,11 @@
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api";
 
+/** URL del escudo de un equipo, servida por NUESTRO backend (proxy). null si el equipo es null. */
+export function crestUrl(teamId: string | null | undefined): string | null {
+  return teamId ? `${BASE}/teams/${teamId}/crest` : null;
+}
+
 const TOKEN_KEY = "gambetea.token";
 const USER_KEY = "gambetea.user";
 const LEAGUE_KEY = "gambetea.league";
@@ -112,7 +117,9 @@ export interface RosterPlayer {
   id: string;
   name: string;
   position: PlayerPos;
+  teamId: string | null;
   club: string | null;
+  clubName: string | null;
   value: number;
   purchasePrice: number;
   points: number;
@@ -122,7 +129,9 @@ export interface RosterPlayer {
 export interface RosterCoach {
   id: string;
   name: string;
+  teamId: string | null;
   club: string | null;
+  clubName: string | null;
   value: number;
   purchasePrice: number;
   points: number;
@@ -141,7 +150,9 @@ export interface LineupPlayer {
   id: string;
   name: string;
   position: PlayerPos;
+  teamId: string | null;
   club: string | null;
+  clubName: string | null;
   points: number;
   injured: boolean;
   suspended: boolean;
@@ -197,7 +208,7 @@ export interface GameweekRow {
 export interface MarketListing {
   listingId: string;
   kind: "PLAYER" | "COACH";
-  asset: { id: string; name: string; position: PlayerPos | null; club: string | null; value: number; points: number; injured: boolean; suspended: boolean };
+  asset: { id: string; name: string; position: PlayerPos | null; teamId: string | null; club: string | null; clubName: string | null; value: number; points: number; injured: boolean; suspended: boolean };
   askingPrice: number;
   closesAt: string;
   freeAgent: boolean;
@@ -207,7 +218,9 @@ export interface LeaguePlayer {
   playerId: string;
   name: string;
   position: PlayerPos;
+  teamId: string | null;
   club: string | null;
+  clubName: string | null;
   value: number;
   clause: number;
   ownerTeamId: string;

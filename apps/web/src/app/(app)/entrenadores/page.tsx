@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Icon from "@/components/Icon";
+import TeamCrest from "@/components/TeamCrest";
 import { useApp } from "@/components/AppProvider";
 import { eur } from "@/lib/format";
 
@@ -27,7 +28,7 @@ export default function Entrenadores() {
           <div style={{ flex: 1, minWidth: 200 }}>
             <div className="muted" style={{ fontFamily: "var(--mono)", fontSize: ".62rem", letterSpacing: ".18em", textTransform: "uppercase" }}>Tu mejor entrenador</div>
             <div style={{ fontFamily: "var(--disp)", fontSize: "1.8rem", textTransform: "uppercase", lineHeight: 1 }}>{best.name}</div>
-            <div className="muted" style={{ fontSize: ".85rem", marginTop: 4 }}>{best.club ?? "—"} · valor {eur(best.value)}</div>
+            <div className="muted" style={{ fontSize: ".85rem", marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}><TeamCrest teamId={best.teamId} name={best.clubName} short={best.club} size={20} />{best.clubName ?? best.club ?? "—"} · valor {eur(best.value)}</div>
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontFamily: "var(--disp)", fontSize: "2.4rem", color: "var(--accent)", lineHeight: 1 }}>{best.points}</div>
@@ -48,7 +49,7 @@ export default function Entrenadores() {
             <div className="coach-card" key={c.id}>
               <div className="ch">
                 <span className="badge-c"><Icon name="coach" /></span>
-                <div><h4>{c.name}</h4><div className="st">{c.club ?? "—"}</div></div>
+                <div><h4>{c.name}</h4><div className="st" style={{ display: "flex", alignItems: "center", gap: 6 }}><TeamCrest teamId={c.teamId} name={c.clubName} short={c.club} />{c.clubName ?? c.club ?? "—"}</div></div>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
                 <span style={{ fontFamily: "var(--disp)", fontSize: "1.6rem" }}>{c.points} <small className="muted" style={{ fontFamily: "var(--sans)", fontSize: ".7rem" }}>pts</small></span>

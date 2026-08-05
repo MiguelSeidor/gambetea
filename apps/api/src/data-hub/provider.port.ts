@@ -16,6 +16,7 @@ export interface ProviderTeam {
   externalId: string;
   name: string;
   shortName: string;
+  crestUrl?: string | null; // URL del escudo/logo en el proveedor (opcional)
 }
 
 export interface ProviderPlayer {

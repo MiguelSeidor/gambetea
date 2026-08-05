@@ -94,8 +94,8 @@ export class ApiFootballProvider implements FootballDataProvider {
   }
 
   async getTeams(): Promise<ProviderTeam[]> {
-    const resp = await this.call<{ team: { id: number; name: string; code: string | null } }[]>(`teams?league=${this.league}&season=${this.season}`);
-    return resp.map((t) => ({ externalId: String(t.team.id), name: t.team.name, shortName: t.team.code ?? t.team.name.slice(0, 3).toUpperCase() }));
+    const resp = await this.call<{ team: { id: number; name: string; code: string | null; logo: string | null } }[]>(`teams?league=${this.league}&season=${this.season}`);
+    return resp.map((t) => ({ externalId: String(t.team.id), name: t.team.name, shortName: t.team.code ?? t.team.name.slice(0, 3).toUpperCase(), crestUrl: t.team.logo ?? null }));
   }
 
   async getSquad(teamExternalId: string): Promise<ProviderPlayer[]> {

@@ -111,7 +111,7 @@ export class FantasyTeamService {
             name: true,
             position: true,
             value: true,
-            team: { select: { name: true, shortName: true } },
+            team: { select: { id: true, name: true, shortName: true } },
           },
         },
       },
@@ -120,7 +120,9 @@ export class FantasyTeamService {
       id: r.player.id,
       name: r.player.name,
       position: r.player.position,
+      teamId: r.player.team?.id ?? null,
       club: r.player.team?.shortName ?? null,
+      clubName: r.player.team?.name ?? null,
       value: r.player.value,
       purchasePrice: r.purchasePrice,
       points: points.get(r.player.id) ?? 0,
@@ -129,12 +131,14 @@ export class FantasyTeamService {
     }));
     const rosterCoaches = await this.prisma.rosterCoach.findMany({
       where: { fantasyTeamId: team.id },
-      include: { coach: { select: { id: true, name: true, value: true, team: { select: { shortName: true } } } } },
+      include: { coach: { select: { id: true, name: true, value: true, team: { select: { id: true, name: true, shortName: true } } } } },
     });
     const coaches = rosterCoaches.map((r) => ({
       id: r.coach.id,
       name: r.coach.name,
+      teamId: r.coach.team?.id ?? null,
       club: r.coach.team?.shortName ?? null,
+      clubName: r.coach.team?.name ?? null,
       value: r.coach.value,
       purchasePrice: r.purchasePrice,
       points: coachPoints.get(r.coach.id) ?? 0,
@@ -291,7 +295,7 @@ export class FantasyTeamService {
     const [players, points, status] = await Promise.all([
       this.prisma.player.findMany({
         where: { id: { in: ids } },
-        select: { id: true, name: true, position: true, team: { select: { shortName: true } } },
+        select: { id: true, name: true, position: true, team: { select: { id: true, name: true, shortName: true } } },
       }),
       seasonPointsMap(this.prisma, seasonId),
       statusMap(this.prisma, seasonId),
@@ -303,7 +307,9 @@ export class FantasyTeamService {
           id: p.id,
           name: p.name,
           position: p.position,
+          teamId: p.team?.id ?? null,
           club: p.team?.shortName ?? null,
+          clubName: p.team?.name ?? null,
           points: points.get(p.id) ?? 0,
           injured: status.get(p.id)?.injured ?? false,
           suspended: status.get(p.id)?.suspended ?? false,

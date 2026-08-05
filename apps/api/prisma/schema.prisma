@@ -116,6 +116,7 @@ model Team {
   id        String   @id @default(cuid())
   name      String
   shortName String
+  crestUrl  String?  // URL del escudo en el proveedor (dato NUESTRO); el backend la sirve vía proxy
   players   Player[]
   coaches   Coach[]
   homeMatches Match[] @relation("home")

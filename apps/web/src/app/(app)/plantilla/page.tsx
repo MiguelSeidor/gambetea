@@ -5,6 +5,7 @@ import { useApp } from "@/components/AppProvider";
 import Modal from "@/components/Modal";
 import { eur } from "@/lib/format";
 import { api, POS_SHORT, type InsuranceTier, type PlayerPos, type RosterPlayer } from "@/lib/api";
+import TeamCrest from "@/components/TeamCrest";
 
 const ORDER: PlayerPos[] = ["GK", "DEF", "MID", "FWD"];
 const LABEL: Record<PlayerPos, string> = { GK: "Porteros", DEF: "Defensas", MID: "Centrocampistas", FWD: "Delanteros" };
@@ -84,7 +85,7 @@ export default function Plantilla() {
                     {p.name}
                     {p.injured && <span title="Lesionado" style={{ marginLeft: 6 }}>🩹</span>}
                     {p.suspended && <span title="Sancionado" style={{ marginLeft: 4 }}>🟥</span>}
-                    <small>{p.club ?? "—"} · {eur(p.value)}</small>
+                    <small><TeamCrest teamId={p.teamId} name={p.clubName} short={p.club} /> · {eur(p.value)}</small>
                   </span>
                   <span className="pts-col">{p.points}<small>pts</small></span>
                   <select
@@ -113,7 +114,7 @@ export default function Plantilla() {
           {team.coaches.map((c) => (
             <div className="prow" key={c.id}>
               <span className="pos DT">ENT</span>
-              <span className="nm" style={{ flex: 1, minWidth: 0 }}>{c.name}<small>{c.club ?? "—"} · {eur(c.value)}</small></span>
+              <span className="nm" style={{ flex: 1, minWidth: 0 }}>{c.name}<small><TeamCrest teamId={c.teamId} name={c.clubName} short={c.club} /> · {eur(c.value)}</small></span>
               <span className="pts-col">{c.points}<small>pts</small></span>
             </div>
           ))}

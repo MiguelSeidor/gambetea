@@ -32,8 +32,8 @@ export class MarketService {
       where: { leagueId, status: "OPEN", sellerTeamId: null },
       orderBy: [{ kind: "asc" }, { closesAt: "asc" }],
       include: {
-        player: { select: { id: true, name: true, position: true, value: true, team: { select: { shortName: true } } } },
-        coach: { select: { id: true, name: true, value: true, team: { select: { shortName: true } } } },
+        player: { select: { id: true, name: true, position: true, value: true, team: { select: { id: true, name: true, shortName: true } } } },
+        coach: { select: { id: true, name: true, value: true, team: { select: { id: true, name: true, shortName: true } } } },
         bids: { where: { fantasyTeamId: teamId }, select: { amount: true } },
       },
     });
@@ -53,7 +53,9 @@ export class MarketService {
           id: asset.id,
           name: asset.name,
           position: isCoach ? null : (l.player!.position as string),
+          teamId: asset.team?.id ?? null,
           club: asset.team?.shortName ?? null,
+          clubName: asset.team?.name ?? null,
           value: asset.value,
           points: isCoach ? (coachPoints.get(asset.id) ?? 0) : (points.get(asset.id) ?? 0),
           injured: isCoach ? false : (status.get(asset.id)?.injured ?? false),
@@ -73,7 +75,7 @@ export class MarketService {
     const roster = await this.prisma.rosterPlayer.findMany({
       where: { fantasyTeam: { membership: { leagueId } } },
       include: {
-        player: { select: { id: true, name: true, position: true, value: true, team: { select: { shortName: true } } } },
+        player: { select: { id: true, name: true, position: true, value: true, team: { select: { id: true, name: true, shortName: true } } } },
         fantasyTeam: { select: { id: true, name: true } },
       },
       orderBy: { player: { value: "desc" } },
@@ -92,7 +94,9 @@ export class MarketService {
         playerId: r.player.id,
         name: r.player.name,
         position: r.player.position,
+        teamId: r.player.team?.id ?? null,
         club: r.player.team?.shortName ?? null,
+        clubName: r.player.team?.name ?? null,
         value: r.player.value,
         clause: r.player.value * mult,
         ownerTeamId: r.fantasyTeam.id,

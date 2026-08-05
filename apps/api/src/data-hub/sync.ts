@@ -59,8 +59,17 @@ export async function backfill(
   }
 
   // --- Plantillas ---
+  // REANUDABLE: si un equipo ya tiene plantilla en la BD, NO pedimos su squad al proveedor. Así,
+  // si un backfill se corta a mitad (p. ej. límite diario de peticiones), reejecutar "Rellenar"
+  // (SIN reinicializar) continúa por los equipos que faltan en vez de gastar cuota repitiendo.
   let players = 0;
   for (const t of teams) {
+    const internalTeamId = teamId.get(t.externalId)!;
+    const existing = await prisma.player.count({ where: { teamId: internalTeamId } });
+    if (existing > 0) {
+      players += existing;
+      continue;
+    }
     const squad = await provider.getSquad(t.externalId);
     for (const p of squad) {
       await mapOrCreate("player", p.externalId, () =>
@@ -73,12 +82,19 @@ export async function backfill(
   }
 
   // --- Entrenadores ---
-  const coaches = await provider.getCoaches();
+  // REANUDABLE: pedimos entrenador SÓLO a los equipos que aún no lo tienen.
+  const teamsMissingCoach: string[] = [];
+  for (const t of teams) {
+    const has = await prisma.coach.count({ where: { teamId: teamId.get(t.externalId)! } });
+    if (has === 0) teamsMissingCoach.push(t.externalId);
+  }
+  const coaches = teamsMissingCoach.length ? await provider.getCoaches(teamsMissingCoach) : [];
   for (const c of coaches) {
     await mapOrCreate("coach", c.externalId, () =>
       prisma.coach.create({ data: { name: c.name, teamId: teamId.get(c.teamExternalId)! } }),
     );
   }
+  const coachTotal = await prisma.coach.count({ where: { teamId: { in: [...teamId.values()] } } });
 
   // --- Calendario: jornadas + partidos ---
   // Anclado a HOY: la 1ª jornada arranca en +ANCHOR_DAYS y cada jornada va +1 semana, de modo
@@ -121,7 +137,7 @@ export async function backfill(
     matches++;
   }
 
-  return { teams: teams.length, players, coaches: coaches.length, gameweeks: gameweekId.size, matches };
+  return { teams: teams.length, players, coaches: coachTotal, gameweeks: gameweekId.size, matches };
 }
 
 export interface GameweekResult {

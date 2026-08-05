@@ -103,7 +103,8 @@ export interface FootballDataProvider {
   getCompetition(): Promise<ProviderCompetition>;
   getTeams(): Promise<ProviderTeam[]>;
   getSquad(teamExternalId: string): Promise<ProviderPlayer[]>;
-  getCoaches(): Promise<ProviderCoach[]>;
+  /** Entrenadores. Si se pasan `teamExternalIds`, sólo se piden esos (reanudable, ahorra peticiones). */
+  getCoaches(teamExternalIds?: string[]): Promise<ProviderCoach[]>;
   getFixtures(): Promise<ProviderFixture[]>;
   /** Resultado + eventos + alineaciones de un partido ya jugado (el mock lo simula). */
   getMatchData(fixtureExternalId: string): Promise<ProviderMatchData>;

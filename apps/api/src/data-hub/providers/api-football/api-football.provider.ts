@@ -43,6 +43,9 @@ export class ApiFootballProvider implements FootballDataProvider {
   private readonly key = (process.env.APIFOOTBALL_KEY ?? "").trim();
   private readonly league = Number((process.env.APIFOOTBALL_LEAGUE ?? "140").trim());
   private readonly season = Number((process.env.APIFOOTBALL_SEASON ?? "2023").trim());
+  // Nº de páginas de plantilla a pedir por equipo (plan free: máx 3). Menos páginas = menos
+  // peticiones del presupuesto diario (100/día). 2 páginas ≈ 40 jugadores, de sobra para el pool.
+  private readonly squadPages = Math.max(1, Math.min(3, Number((process.env.APIFOOTBALL_SQUAD_PAGES ?? "2").trim()) || 2));
   // Cola serializada para respetar el límite de 10 peticiones/minuto del plan free.
   private throttleChain: Promise<void> = Promise.resolve();
   private lastCallAt = 0;
@@ -93,8 +96,8 @@ export class ApiFootballProvider implements FootballDataProvider {
 
   async getSquad(teamExternalId: string): Promise<ProviderPlayer[]> {
     // Plantilla REAL de la temporada (no la actual): `players?team&season`, paginado.
-    // El plan FREE limita el parámetro `page` a un máximo de 3 (≈60 jugadores, de sobra).
-    const MAX_PAGES = 3;
+    // El plan FREE limita el parámetro `page` a un máximo de 3; pedimos `squadPages` (2 por defecto)
+    // para no fundir el presupuesto diario de peticiones.
     const out: ProviderPlayer[] = [];
     let page = 1;
     let total = 1;
@@ -104,20 +107,21 @@ export class ApiFootballProvider implements FootballDataProvider {
         const g = item.statistics?.[0]?.games;
         out.push({ externalId: String(item.player.id), teamExternalId, name: item.player.name, position: mapPosition(g?.position), rating: ratingFromSeasonAvg(g?.rating) });
       }
-      total = Math.min(env.paging?.total ?? 1, MAX_PAGES);
+      total = Math.min(env.paging?.total ?? 1, this.squadPages);
       page++;
     } while (page <= total);
     return out;
   }
 
-  async getCoaches(): Promise<ProviderCoach[]> {
-    // Un entrenador por equipo (el actual). Barato: 1 req/equipo.
-    const teams = await this.getTeams();
+  async getCoaches(teamExternalIds?: string[]): Promise<ProviderCoach[]> {
+    // Un entrenador por equipo (el actual). Barato: 1 req/equipo. Si `teamExternalIds` viene dado
+    // (backfill reanudable), sólo pedimos esos y ahorramos la llamada a getTeams.
+    const ids = teamExternalIds ?? (await this.getTeams()).map((t) => t.externalId);
     const coaches: ProviderCoach[] = [];
-    for (const t of teams) {
-      const resp = await this.call<{ id: number; name: string }[]>(`coachs?team=${t.externalId}`);
+    for (const teamExternalId of ids) {
+      const resp = await this.call<{ id: number; name: string }[]>(`coachs?team=${teamExternalId}`);
       const c = resp[0];
-      if (c) coaches.push({ externalId: String(c.id), teamExternalId: t.externalId, name: c.name });
+      if (c) coaches.push({ externalId: String(c.id), teamExternalId, name: c.name });
     }
     return coaches;
   }

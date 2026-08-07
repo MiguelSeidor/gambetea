@@ -168,7 +168,7 @@ export default function Alineacion() {
 
           <div className="xi-group">
             <div className="gh"><span className="lab">Entrenador</span></div>
-            <select className="save-bar-select" value={chosenCoach} onChange={(e) => setChosenCoach(e.target.value)} disabled={!editable} style={{ width: "100%" }}>
+            <select value={chosenCoach} onChange={(e) => setChosenCoach(e.target.value)} disabled={!editable} style={{ width: "100%" }}>
               <option value="">Sin entrenador</option>
               {team.coaches.map((c) => <option key={c.id} value={c.id}>{c.name}{c.club ? ` · ${c.club}` : ""}</option>)}
             </select>
@@ -176,7 +176,7 @@ export default function Alineacion() {
 
           <div className="xi-group">
             <div className="gh"><span className="lab">Banquillo (1)</span></div>
-            <select value={benchId} onChange={(e) => setBenchId(e.target.value)} disabled={!editable} style={{ width: "100%" }} className="save-bar-select">
+            <select value={benchId} onChange={(e) => setBenchId(e.target.value)} disabled={!editable} style={{ width: "100%" }}>
               <option value="">Sin suplente</option>
               {benchOptions.map((p) => <option key={p.id} value={p.id}>{POS_SHORT[p.position]} · {p.name}</option>)}
             </select>

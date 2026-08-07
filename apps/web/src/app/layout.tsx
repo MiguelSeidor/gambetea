@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Anton, Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 import Maintenance from "@/components/Maintenance";
@@ -21,6 +21,17 @@ export const metadata: Metadata = {
   title: "Gambetea — Juega distinto",
   description:
     "El Fantasy de fútbol de siempre, con una gambeta nueva: no solo fichas jugadores, también entrenadores y construyes tu propio estadio.",
+};
+
+// Viewport móvil: el tema es siempre oscuro y la barra del navegador acompaña.
+// Se deja el zoom del usuario habilitado (accesibilidad): no fijamos maximumScale.
+export const viewport: Viewport = {
+  themeColor: "#08070B",
+  colorScheme: "dark",
+  width: "device-width",
+  initialScale: 1,
+  // Edge-to-edge en móviles con notch: activa que env(safe-area-inset-*) tenga efecto.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

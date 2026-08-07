@@ -210,17 +210,81 @@
 /* ===== EMPTY / SECTION HEADER FOR STUB PAGES ===== */
 .section-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
-/* ===== RESPONSIVE SHELL: sidebar -> top scroller ===== */
+/* ===== RESPONSIVE SHELL: el sidebar (>900px) se sustituye en móvil por una
+   barra de pestañas inferior alcanzable con el pulgar + una hoja "Más". ===== */
+.botnav { display: none; } /* oculta en escritorio: manda el sidebar */
+
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
-  .side { position: sticky; top: 0; height: auto; flex-direction: row; align-items: center; gap: 10px;
-    border-right: none; border-bottom: 1px solid var(--line); padding: 12px 14px; overflow-x: auto; }
-  .side-brand { padding: 0 8px 0 0; } .side-label, .side-foot .um { display: none; }
-  .side-nav { flex-direction: row; }
-  .nav-item span.t { display: none; } .nav-item { padding: 10px; }
-  .nav-item.active::before { display: none; }
-  .side-foot { margin: 0 0 0 auto; border: none; padding: 0; }
+  .side { display: none; } /* el sidebar desaparece; su función pasa a la barra inferior */
+
+  /* Barra de pestañas inferior */
+  .botnav {
+    display: flex; position: fixed; z-index: 50; left: 0; right: 0; bottom: 0;
+    justify-content: space-around; gap: 2px;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    backdrop-filter: blur(16px) saturate(1.2);
+    border-top: 1px solid var(--line);
+  }
+  .botnav-item {
+    flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 7px 4px 5px; min-height: 52px; border: none; border-radius: 12px; background: transparent;
+    color: var(--muted); font-family: var(--sans); font-weight: 500; font-size: .62rem; letter-spacing: .01em;
+    cursor: pointer; transition: color .16s, background .16s;
+  }
+  .botnav-item .t { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .botnav-item svg { opacity: .85; }
+  .botnav-item:hover { color: var(--ink); }
+  .botnav-item.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .botnav-item.active svg { opacity: 1; }
+
+  /* Hueco bajo el contenido para no quedar tapado por la barra inferior */
+  .content { padding-bottom: calc(64px + env(safe-area-inset-bottom) + 16px); }
+
+  /* Tablas densas: hacen scroll DENTRO de su tarjeta, nunca la página. Debe
+     aplicar desde ≤900px (cuando entra el shell móvil): si no, entre 641–900px
+     las tablas anchas (admin 6 col, mercado 7 col) las recorta .card.pad0
+     {overflow:hidden} en vez de desplazarse. display:block + overflow-x:auto
+     envuelve la tabla en una caja desplazable; las columnas de texto pueden
+     partir y las numéricas/acciones mantienen ancho y activan el scroll solo
+     cuando hace falta. */
+  .card .table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .card .table th, .card .table td.num, .card .table .rank { white-space: nowrap; }
+
+  /* Los toasts suben por encima de la barra inferior y nunca se salen de pantalla */
+  .toast { bottom: calc(72px + env(safe-area-inset-bottom)); max-width: calc(100vw - 28px); }
 }
+
+/* Hoja "Más" (bottom sheet) — controles secundarios en móvil */
+.sheet-overlay {
+  position: fixed; inset: 0; z-index: 210; display: flex; flex-direction: column; justify-content: flex-end;
+  background: color-mix(in srgb, var(--bg) 66%, transparent); backdrop-filter: blur(6px);
+  animation: modalFade .16s ease;
+}
+.sheet {
+  background: linear-gradient(180deg, var(--panel), var(--bg)); border: 1px solid var(--line-2); border-bottom: none;
+  border-top-left-radius: 22px; border-top-right-radius: 22px;
+  padding: 12px 16px calc(20px + env(safe-area-inset-bottom));
+  max-height: 86vh; overflow-y: auto; animation: sheetUp .22s cubic-bezier(.2,.9,.3,1.05);
+}
+.sheet::before { content: ""; display: block; width: 40px; height: 4px; border-radius: 100px;
+  background: var(--line-2); margin: 2px auto 12px; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.sheet-brand { display: flex; align-items: center; gap: .5em; }
+.sheet-brand img { height: 26px; width: auto; filter: drop-shadow(0 4px 12px rgba(255,90,31,.3)); }
+.sheet-brand .wm { font-family: var(--disp); font-size: 1.2rem; letter-spacing: .01em;
+  background: linear-gradient(100deg, var(--accent) 34%, var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.sheet-league { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.sheet-league .league-switch { width: 100%; max-width: none; margin: 0; text-align: left; padding: 12px; cursor: pointer; }
+.sheet-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.sheet-item { display: flex; align-items: center; gap: 10px; padding: 12px; min-height: 48px; border-radius: 12px;
+  background: var(--bg); border: 1px solid var(--line); color: var(--muted); font-weight: 500; font-size: .9rem; }
+.sheet-item svg { flex: none; opacity: .9; }
+.sheet-item.active { color: var(--ink); border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.sheet-foot { border-top: 1px solid var(--line); padding-top: 12px; }
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: none; } }
 
 /* ===== AUTH ===== */
 .auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; position: relative; overflow: hidden; }
@@ -252,7 +316,7 @@
 .league-switch { width: 100%; margin: 2px 0 6px; padding: 9px 10px; border-radius: 10px; background: var(--bg);
   border: 1px solid var(--line-2); color: var(--ink); font-family: var(--sans); font-size: .84rem; cursor: pointer; }
 .league-switch:focus { outline: none; border-color: var(--accent); }
-@media (max-width: 900px) { .league-switch { width: auto; max-width: 160px; margin: 0; } }
+/* En móvil el selector de liga vive en la hoja "Más" (ver .sheet-league), a lo ancho. */
 
 /* Reglas */
 .rules-list { margin: 14px 0 0; padding-left: 20px; display: grid; gap: 9px; font-size: .9rem; line-height: 1.55; color: var(--ink); }
@@ -262,7 +326,9 @@
 .prow .pts-col small { display: block; color: var(--muted); font-weight: 400; font-size: .72rem; margin-top: 1px; }
 
 /* Modal (ventana in-game) */
-.modal-overlay { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 20px;
+/* z-index 220: por encima de la hoja "Más" (.sheet-overlay = 210) para que el
+   modal de cambio de contraseña quede siempre delante si ambos coincidieran. */
+.modal-overlay { position: fixed; inset: 0; z-index: 220; display: grid; place-items: center; padding: 20px;
   background: color-mix(in srgb, var(--bg) 72%, transparent); backdrop-filter: blur(6px); animation: modalFade .16s ease; }
 .modal { width: 100%; max-width: 420px; background: var(--card, #141118); border: 1px solid var(--line-2, #302c3a);
   border-radius: 16px; padding: 24px; box-shadow: 0 24px 70px rgba(0,0,0,.55); animation: modalPop .18s cubic-bezier(.2,.9,.3,1.2); }
@@ -285,3 +351,46 @@
 .side-pw { width: 100%; margin-top: 8px; background: transparent; border: 1px solid var(--line-2, #302c3a);
   border-radius: 9px; padding: 8px; color: var(--muted); font-size: .8rem; cursor: pointer; transition: color .15s, border-color .15s; }
 .side-pw:hover { color: var(--ink); border-color: var(--accent); }
+
+/* ============================================================================
+   AJUSTES DE MÓVIL (teléfono, ≤640px). El patrón de navegación se gestiona en
+   el bloque de 900px (barra inferior + hoja "Más"); aquí van refinamientos de
+   contenido para que todo sea legible y nada desborde la pantalla.
+   ============================================================================ */
+@media (max-width: 640px) {
+  /* --- Topbar compacta --- */
+  .topbar { height: 56px; padding: 0 16px; gap: 10px; }
+  .topbar .tb-title { font-size: 1.15rem; }
+  .tb-right { gap: 6px; }
+  .tb-stat { padding: 0 0 0 8px; }
+  .tb-stat .v { font-size: .85rem; }
+  .tb-stat.tb-liga { display: none; }  /* la liga se ve en la hoja "Más" */
+
+  /* --- Cabecera de página un poco más contenida --- */
+  .page-head h1 { font-size: clamp(1.9rem, 8vw, 2.4rem); }
+  .content { gap: 20px; }
+
+  /* Tablas: en el teléfono apretamos un poco el padding (el scroll-en-tarjeta
+     se define en el bloque ≤900px para cubrir también tablets pequeñas). */
+  .card .table th, .card .table td { padding: 11px 12px; }
+
+  /* --- Filas de plantilla: el select de seguro pasa a línea completa (mejor tap target) --- */
+  .prow { flex-wrap: wrap; gap: 10px 12px; }
+  .prow > .ins-select { flex: 1 0 100%; margin: 2px 0 0; }
+
+  /* --- Campo (alineación): fichas y etiquetas más pequeñas para que no se corten --- */
+  .pitch { max-width: 100%; }
+  .pp { width: 62px; gap: 4px; }
+  .pp .dot { width: 38px; height: 38px; font-size: .82rem; }
+  .pp .lbl { font-size: .6rem; max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* --- Modal: márgenes y padding más ajustados en pantallas pequeñas --- */
+  .modal-overlay { padding: 14px; }
+  .modal { padding: 20px; }
+}
+
+@media (max-width: 480px) {
+  /* En pantallas muy estrechas dejamos solo la jornada en la topbar (el saldo se
+     ve en el contenido de dashboard/plantilla/finanzas). */
+  .tb-stat.tb-saldo { display: none; }
+}

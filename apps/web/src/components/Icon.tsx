@@ -1,7 +1,8 @@
 // Iconos de línea (stroke) para la app. Uso: <Icon name="dashboard" />
 type Name =
   | "dashboard" | "squad" | "pitch" | "market" | "coach" | "stadium"
-  | "table" | "logout" | "bell" | "search" | "chevron" | "spark" | "wallet" | "shield" | "book";
+  | "table" | "logout" | "bell" | "search" | "chevron" | "spark" | "wallet" | "shield" | "book"
+  | "more" | "close";
 
 const paths: Record<Name, React.ReactNode> = {
   dashboard: <><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></>,
@@ -19,6 +20,8 @@ const paths: Record<Name, React.ReactNode> = {
   wallet: <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M16 12h3M3 9h18" /></>,
   shield: <><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" /><path d="M9 12l2 2 4-4" /></>,
   book: <><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" /><path d="M4 19V5" /><path d="M9 7h7M9 11h7" /></>,
+  more: <><rect x="4" y="4" width="6" height="6" rx="1.6" /><rect x="14" y="4" width="6" height="6" rx="1.6" /><rect x="4" y="14" width="6" height="6" rx="1.6" /><rect x="14" y="14" width="6" height="6" rx="1.6" /></>,
+  close: <path d="M6 6l12 12M18 6L6 18" />,
 };
 
 export default function Icon({ name, size = 20 }: { name: Name; size?: number }) {

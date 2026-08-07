@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import Icon from "@/components/Icon";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
 import {
@@ -142,7 +142,11 @@ export default function AppProvider({ children }: { children: React.ReactNode })
 
 // ===== Layout autenticado (shell) ==========================================
 
-const NAV = [
+type IconName = React.ComponentProps<typeof Icon>["name"];
+type NavItem = { href: string; label: string; icon: IconName };
+type NavGroup = { group: string; items: NavItem[] };
+
+const NAV: NavGroup[] = [
   {
     group: "Mi equipo",
     items: [
@@ -179,25 +183,87 @@ const TITLES: Record<string, string> = {
   "/admin": "Administración",
 };
 
-const ADMIN_GROUP = {
+const ADMIN_GROUP: NavGroup = {
   group: "Administración",
   items: [{ href: "/admin", label: "Admin global", icon: "shield" as const }],
 };
+
+// Pestañas principales de la barra inferior en móvil (las 4 pantallas más usadas).
+// El resto (clasificación, finanzas, entrenadores, estadio, reglas, config) va a "Más".
+const PRIMARY_HREFS = ["/dashboard", "/plantilla", "/alineacion", "/mercado"];
 
 function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
   const { user, team, gwNumber, leagues, leagueId, league, selectLeague, goToLobby, logout } = useApp();
   const [changePwOpen, setChangePwOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false); // hoja "Más" en móvil
+  const sheetRef = useRef<HTMLDivElement>(null);
   const adminMode = !!user.isAdmin; // solo el superadmin ve el shell de admin (no "no tener liga")
   const title = TITLES[path] ?? "Gambetea";
   const initial = (team?.name ?? user.displayName).charAt(0).toUpperCase();
   const navGroups = adminMode ? [ADMIN_GROUP] : NAV;
 
+  // Navegación móvil: barra inferior con los ítems principales + "Más" para el resto.
+  // Los 4 ítems principales se eligen A PROPÓSITO (los de mayor frecuencia de uso),
+  // no por orden: mercado y clasificación pesan más que finanzas en un fantasy.
+  const flatNav = navGroups.flatMap((g) => g.items);
+  const primaryNav = adminMode
+    ? flatNav // en admin solo hay un ítem: va directo a la barra
+    : (PRIMARY_HREFS.map((h) => flatNav.find((it) => it.href === h)).filter(Boolean) as NavItem[]);
+  const overflowNav = flatNav.filter((it) => !primaryNav.includes(it));
+  const overflowActive = overflowNav.some((it) => it.href === path);
+
   // En modo admin solo tiene sentido el panel de administración.
   useEffect(() => {
     if (adminMode && path !== "/admin") router.replace("/admin");
   }, [adminMode, path, router]);
+
+  // Cierra la hoja "Más" al cambiar de ruta (p. ej. al pulsar un ítem de dentro).
+  useEffect(() => { setMoreOpen(false); }, [path]);
+
+  // Al volver a escritorio (sidebar visible) la hoja "Más" deja de tener sentido.
+  useEffect(() => {
+    const onResize = () => { if (window.innerWidth > 900) setMoreOpen(false); };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Accesibilidad de la hoja "Más": bloqueo de scroll de fondo, foco atrapado
+  // dentro de la hoja, foco inicial al abrir y devolución del foco al cerrar,
+  // y cierre con Escape (mismo patrón que Modal.tsx).
+  useEffect(() => {
+    if (!moreOpen) return;
+    const prevFocused = document.activeElement as HTMLElement | null;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const sheet = sheetRef.current;
+    const focusables = () =>
+      sheet
+        ? Array.from(
+            sheet.querySelectorAll<HTMLElement>(
+              'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            ),
+          )
+        : [];
+    (focusables()[0] ?? sheet)?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); setMoreOpen(false); return; }
+      if (e.key !== "Tab") return;
+      const items = focusables();
+      if (items.length === 0) return;
+      const first = items[0], last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !sheet?.contains(active))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+      prevFocused?.focus?.();
+    };
+  }, [moreOpen]);
 
   return (
     <div className="shell">
@@ -261,8 +327,9 @@ function Shell({ children }: { children: React.ReactNode }) {
               <div className="tb-stat"><span className="k">Rol</span><span className="v">Superadmin</span></div>
             ) : (
               <>
-                <div className="tb-stat"><span className="k">Liga</span><span className="v">{league?.name}</span></div>
-                <div className="tb-stat"><span className="k">Saldo</span><span className="v">{team ? eur(team.budget) : "—"}</span></div>
+                {/* En móvil se ocultan Liga (visible en la hoja "Más") y Saldo (visible en el contenido). */}
+                <div className="tb-stat tb-liga"><span className="k">Liga</span><span className="v">{league?.name}</span></div>
+                <div className="tb-stat tb-saldo"><span className="k">Saldo</span><span className="v">{team ? eur(team.budget) : "—"}</span></div>
                 <div className="tb-stat"><span className="k">Jornada</span><span className="v">{gwNumber ? `J${gwNumber}` : "—"}</span></div>
               </>
             )}
@@ -270,6 +337,93 @@ function Shell({ children }: { children: React.ReactNode }) {
         </header>
         <main className="content">{children}</main>
       </div>
+
+      {/* ===== NAVEGACIÓN MÓVIL: barra inferior (thumb-friendly) ===== */}
+      <nav className="botnav" aria-label="Navegación principal">
+        {primaryNav.map((it) => (
+          <Link
+            key={it.href}
+            href={it.href}
+            className={`botnav-item${path === it.href ? " active" : ""}`}
+            aria-current={path === it.href ? "page" : undefined}
+          >
+            <Icon name={it.icon} />
+            <span className="t">{it.label}</span>
+          </Link>
+        ))}
+        <button
+          type="button"
+          className={`botnav-item${overflowActive || moreOpen ? " active" : ""}`}
+          onClick={() => setMoreOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={moreOpen}
+        >
+          <Icon name="more" />
+          <span className="t">Más</span>
+        </button>
+      </nav>
+
+      {/* Hoja "Más": resto de secciones + controles secundarios (liga, salir, contraseña) */}
+      {moreOpen && (
+        <div className="sheet-overlay" role="presentation" onClick={() => setMoreOpen(false)}>
+          <div className="sheet" ref={sheetRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Más opciones" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-head">
+              <span className="sheet-brand">
+                <img src="/brand/crest.webp" alt="" width={26} height={29} />
+                <span className="wm">Gambetea</span>
+              </span>
+              <button className="icon-btn" onClick={() => setMoreOpen(false)} aria-label="Cerrar">
+                <Icon name="close" size={16} />
+              </button>
+            </div>
+
+            {!adminMode && (
+              <div className="sheet-league">
+                {leagues.length > 1 && (
+                  <select
+                    className="league-switch"
+                    value={leagueId}
+                    onChange={(e) => void selectLeague(e.target.value)}
+                    aria-label="Cambiar de liga"
+                  >
+                    {leagues.map((l) => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
+                )}
+                <button className="league-switch" onClick={() => { setMoreOpen(false); goToLobby(); }}>← Mis ligas</button>
+              </div>
+            )}
+
+            {overflowNav.length > 0 && (
+              <nav className="sheet-nav" aria-label="Más secciones">
+                {overflowNav.map((it) => (
+                  <Link
+                    key={it.href}
+                    href={it.href}
+                    className={`sheet-item${path === it.href ? " active" : ""}`}
+                    aria-current={path === it.href ? "page" : undefined}
+                  >
+                    <Icon name={it.icon} />
+                    <span>{it.label}</span>
+                  </Link>
+                ))}
+              </nav>
+            )}
+
+            <div className="sheet-foot">
+              <div className="user-chip">
+                <span className="avatar">{initial}</span>
+                <span className="um">{adminMode ? "Administrador" : (team?.name ?? "Mi equipo")}<small>{user.displayName}</small></span>
+                <button onClick={logout} className="icon-btn" style={{ marginLeft: "auto", width: 32, height: 32 }} aria-label="Salir">
+                  <Icon name="logout" size={16} />
+                </button>
+              </div>
+              <button className="side-pw" onClick={() => { setMoreOpen(false); setChangePwOpen(true); }}>Cambiar contraseña</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Anton, Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 import Maintenance from "@/components/Maintenance";
+import PwaRegister from "@/components/PwaRegister";
 
 const anton = Anton({
   weight: "400",
@@ -21,6 +22,9 @@ export const metadata: Metadata = {
   title: "Gambetea — Juega distinto",
   description:
     "El Fantasy de fútbol de siempre, con una gambeta nueva: no solo fichas jugadores, también entrenadores y construyes tu propio estadio.",
+  applicationName: "Gambetea",
+  // PWA: instalable en la pantalla de inicio y a pantalla completa como una app nativa.
+  appleWebApp: { capable: true, title: "Gambetea", statusBarStyle: "black" },
 };
 
 // Viewport móvil: el tema es siempre oscuro y la barra del navegador acompaña.
@@ -46,6 +50,7 @@ export default function RootLayout({
           <style>{`.rise{transform:none!important}.fadeup{opacity:1!important;transform:none!important}.rv{opacity:1!important;transform:none!important}`}</style>
         </noscript>
         {process.env.MAINTENANCE === "1" ? <Maintenance /> : children}
+        <PwaRegister />
       </body>
     </html>
   );

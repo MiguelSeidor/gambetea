@@ -359,23 +359,39 @@
    ============================================================================ */
 @media (max-width: 640px) {
   /* --- Topbar compacta --- */
-  .topbar { height: 56px; padding: 0 16px; gap: 10px; }
-  .topbar .tb-title { font-size: 1.15rem; }
+  .topbar { height: 54px; padding: 0 14px; gap: 10px; }
+  .topbar .tb-title { font-size: 1.1rem; }
   .tb-right { gap: 6px; }
   .tb-stat { padding: 0 0 0 8px; }
-  .tb-stat .v { font-size: .85rem; }
+  .tb-stat .v { font-size: .82rem; }
   .tb-stat.tb-liga { display: none; }  /* la liga se ve en la hoja "Más" */
 
-  /* --- Cabecera de página un poco más contenida --- */
-  .page-head h1 { font-size: clamp(1.9rem, 8vw, 2.4rem); }
-  .content { gap: 20px; }
+  /* --- Densidad: en el teléfono el listón premium pide MENOS aire, no más.
+     Tipografías más contenidas y espaciados apretados sin llegar a agobiar.
+     Ojo: NO usar el atajo `padding` en .content (borraría el padding-bottom que
+     reserva hueco para la barra inferior); se ajustan sólo top/inline. --- */
+  .content { padding-top: 16px; padding-left: 14px; padding-right: 14px; gap: 14px; }
+  .page-head h1 { font-size: clamp(1.5rem, 6vw, 1.95rem); margin-top: 4px; }
+  .page-head p { font-size: .84rem; margin-top: 6px; line-height: 1.45; }
+  .page-head .eb { font-size: .6rem; }
+  .card { padding: 15px; border-radius: 15px; }
+  .card-head { margin-bottom: 12px; }
+  .card-head h3 { font-size: .98rem; }
+  .grid { gap: 12px; }
+  .tile { padding: 15px; border-radius: 15px; }
+  .tile .k { font-size: .58rem; }
+  .tile .v { font-size: clamp(1.7rem, 7vw, 2.1rem); margin-top: 6px; }
+  .tile .d { font-size: .76rem; margin-top: 6px; }
+  .coach-card { padding: 14px; border-radius: 14px; }
+  .section-actions { gap: 8px; }
 
-  /* Tablas: en el teléfono apretamos un poco el padding (el scroll-en-tarjeta
-     se define en el bloque ≤900px para cubrir también tablets pequeñas). */
-  .card .table th, .card .table td { padding: 11px 12px; }
+  /* Tablas: padding y tipografía más apretados (el scroll-en-tarjeta se define
+     en el bloque ≤900px para cubrir también tablets pequeñas). */
+  .card .table th { padding: 9px 11px; font-size: .56rem; }
+  .card .table td { padding: 10px 11px; font-size: .86rem; }
 
   /* --- Filas de plantilla: el select de seguro pasa a línea completa (mejor tap target) --- */
-  .prow { flex-wrap: wrap; gap: 10px 12px; }
+  .prow { flex-wrap: wrap; gap: 10px 12px; padding: 10px 2px; }
   .prow > .ins-select { flex: 1 0 100%; margin: 2px 0 0; }
 
   /* --- Campo (alineación): fichas y etiquetas más pequeñas para que no se corten --- */

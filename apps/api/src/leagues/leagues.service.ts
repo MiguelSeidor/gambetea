@@ -48,8 +48,27 @@ export class LeaguesService {
       include: { memberships: { include: { fantasyTeam: true } } },
     });
     const team = league.memberships[0]?.fantasyTeam;
-    if (team) await this.fantasy.initialize(team.id, season.id);
+    if (team) {
+      try {
+        await this.fantasy.initialize(team.id, season.id);
+      } catch (e) {
+        // Draft fallido (p. ej. el Hub aún no tiene jugadores suficientes): no dejamos una liga
+        // "zombi" a medias. El borrado en cascada limpia liga + membresía + equipo.
+        await this.prisma.league.delete({ where: { id: league.id } }).catch(() => undefined);
+        throw e;
+      }
+    }
     return this.getOne(userId, league.id);
+  }
+
+  /** Borra una liga por completo (solo el propietario). Cascade elimina equipos, plantillas,
+   *  mercado, estadio, alineaciones y puntuaciones asociadas. Irreversible. */
+  async remove(userId: string, leagueId: string) {
+    const league = await this.prisma.league.findUnique({ where: { id: leagueId }, select: { ownerId: true } });
+    if (!league) throw new NotFoundException("Liga no encontrada");
+    if (league.ownerId !== userId) throw new ForbiddenException("Solo el propietario puede borrar la liga");
+    await this.prisma.league.delete({ where: { id: leagueId } });
+    return { deleted: leagueId };
   }
 
   /** Une al usuario a una liga existente mediante código de invitación. */
@@ -75,7 +94,14 @@ export class LeaguesService {
       include: { fantasyTeam: true },
     });
     if (membership.fantasyTeam) {
-      await this.fantasy.initialize(membership.fantasyTeam.id, league.seasonId);
+      try {
+        await this.fantasy.initialize(membership.fantasyTeam.id, league.seasonId);
+      } catch (e) {
+        // Draft fallido al unirse: deshacemos la membresía (cascade borra su equipo) y no dejamos
+        // al usuario dentro con un equipo vacío.
+        await this.prisma.leagueMembership.delete({ where: { id: membership.id } }).catch(() => undefined);
+        throw e;
+      }
     }
     return this.getOne(userId, league.id);
   }

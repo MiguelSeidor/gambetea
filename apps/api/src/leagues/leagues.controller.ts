@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/current-user.decorator";
 import type { AuthUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -31,6 +31,11 @@ export class LeaguesController {
   @Get(":id")
   getOne(@CurrentUser() user: AuthUser, @Param("id") id: string) {
     return this.leagues.getOne(user.id, id);
+  }
+
+  @Delete(":id")
+  remove(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.leagues.remove(user.id, id);
   }
 
   @Get(":id/gameweeks")

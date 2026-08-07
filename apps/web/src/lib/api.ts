@@ -371,6 +371,7 @@ export const api = {
     request<LeagueDetail>("/leagues", { method: "POST", body }),
   joinLeague: (body: { inviteCode: string; teamName?: string }) =>
     request<LeagueDetail>("/leagues/join", { method: "POST", body }),
+  deleteLeague: (id: string) => request<{ deleted: string }>(`/leagues/${id}`, { method: "DELETE" }),
   gameweeks: (leagueId: string) => request<GameweekRow[]>(`/leagues/${leagueId}/gameweeks`),
   gameweekMatches: (leagueId: string, gwId: string) =>
     request<GameweekMatch[]>(`/leagues/${leagueId}/gameweeks/${gwId}/matches`),

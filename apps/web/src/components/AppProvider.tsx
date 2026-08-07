@@ -111,6 +111,11 @@ export default function AppProvider({ children }: { children: React.ReactNode })
     setPhase("lobby");
   }, []);
 
+  const deleteLeague = useCallback(async (id: string) => {
+    await api.deleteLeague(id);
+    setLeagues(await api.myLeagues().catch(() => []));
+  }, []);
+
   const logout = useCallback(() => {
     clearSession();
     router.replace("/login");
@@ -124,7 +129,7 @@ export default function AppProvider({ children }: { children: React.ReactNode })
         <button className="btn" onClick={() => location.reload()} style={{ marginTop: 16 }}><span>Reintentar</span></button>
       </FullScreen>
     );
-  if (phase === "lobby") return <Lobby user={user} leagues={leagues} onEnter={selectLeague} onLogout={logout} />;
+  if (phase === "lobby") return <Lobby user={user} leagues={leagues} onEnter={selectLeague} onDelete={deleteLeague} onLogout={logout} />;
 
   const league = leagues.find((l) => l.id === leagueId) ?? null;
   const value: AppCtx = { user: user!, leagues, leagueId, league, team, gwNumber, selectLeague, goToLobby, refresh, logout };
@@ -272,11 +277,12 @@ function Shell({ children }: { children: React.ReactNode }) {
 // ===== Lobby (entrar a tus ligas · crear · unirse) =========================
 
 function Lobby({
-  user, leagues, onEnter, onLogout,
+  user, leagues, onEnter, onDelete, onLogout,
 }: {
   user: SessionUser | null;
   leagues: LeagueSummary[];
   onEnter: (id: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
   onLogout: () => void;
 }) {
   const [mode, setMode] = useState<"create" | "join">(leagues.length ? "create" : "create");
@@ -285,6 +291,20 @@ function Lobby({
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  async function remove(id: string, name: string) {
+    if (!window.confirm(`¿Borrar la liga "${name}"? Se eliminan todos sus equipos y plantillas. No se puede deshacer.`)) return;
+    setDeleting(id);
+    setError(null);
+    try {
+      await onDelete(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo borrar la liga");
+    } finally {
+      setDeleting(null);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -318,13 +338,22 @@ function Lobby({
         {leagues.length > 0 && (
           <div style={{ display: "grid", gap: 10, margin: "6px 0 20px" }}>
             {leagues.map((l) => (
-              <button key={l.id} className="lobby-league" onClick={() => void onEnter(l.id)}>
-                <span className="ll-main">
-                  <b>{l.name}</b>
-                  <small>{l.competition} · {l.memberCount} mánager{l.memberCount === 1 ? "" : "s"} · {l.role === "OWNER" ? "creador" : "miembro"}</small>
-                </span>
-                <span className="ll-go">Entrar →</span>
-              </button>
+              <div key={l.id} style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                <button className="lobby-league" style={{ flex: 1 }} onClick={() => void onEnter(l.id)}>
+                  <span className="ll-main">
+                    <b>{l.name}</b>
+                    <small>{l.competition} · {l.memberCount} mánager{l.memberCount === 1 ? "" : "s"} · {l.role === "OWNER" ? "creador" : "miembro"}</small>
+                  </span>
+                  <span className="ll-go">Entrar →</span>
+                </button>
+                {l.role === "OWNER" && (
+                  <button className="chip" title="Borrar liga" aria-label={`Borrar liga ${l.name}`}
+                    disabled={deleting === l.id} onClick={() => void remove(l.id, l.name)}
+                    style={{ flex: "0 0 auto", alignSelf: "center" }}>
+                    {deleting === l.id ? "…" : "🗑"}
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}

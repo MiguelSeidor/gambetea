@@ -24,6 +24,7 @@
 | [017](ADR-017.md) | Recalibración económica con el baremo enriquecido (valor-por-punto, salario, prima, compensación) | Propuesto | 8 | 2026-07-30 |
 | [018](ADR-018.md) | Ciclo de vida del jugador (reconciliación del Hub: traspaso-fuera/jubilación/cambio club-posición) + feed de noticias | Propuesto | 8 | 2026-07-31 |
 | [019](ADR-019.md) | Adaptador api-football (datos reales, capa gratuita) + estrategia de prueba con temporada pasada | Propuesto | 0→1 | 2026-07-31 |
+| [020](ADR-020.md) | Aplazamientos: liquidación parcial (delta) por partido (extiende ADR-010) | Propuesto | 6→1 | 2026-08-09 |
 
 ## Cómo se usa
 

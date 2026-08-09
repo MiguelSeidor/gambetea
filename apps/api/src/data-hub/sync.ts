@@ -98,44 +98,71 @@ export async function backfill(
   }
   const coachTotal = await prisma.coach.count({ where: { teamId: { in: [...teamId.values()] } } });
 
-  // --- Calendario: jornadas + partidos ---
-  // Anclado a HOY: la 1ª jornada arranca en +ANCHOR_DAYS y cada jornada va +1 semana, de modo
-  // que las jornadas no jugadas quedan en el FUTURO (deadlines válidos). La fecha límite de
-  // alineación es 30 min antes del primer partido de la jornada (ADR-010).
+  // --- Calendario: jornadas + partidos (ADR-010 · calendario realista) ---
+  // Anclado al FUTURO pero con REPARTO REALISTA: cada jornada arranca un VIERNES (cadencia
+  // semanal) y DENTRO de la jornada se conservan los desfases reales del proveedor (Vie/Sáb/Dom/
+  // Lun y la hora de cada partido). Así el snapshot se toma 30 min antes del PRIMER partido y la
+  // liquidación ocurre tras el ÚLTIMO, con los partidos repartidos en varios días (como en la
+  // realidad). Reejecutable: refresca las fechas de jornadas/partidos AÚN NO jugados (no toca lo
+  // ya FINISHED), así que re-anclar el calendario no exige reinicializar.
   const fixtures = await provider.getFixtures();
   const ANCHOR_DAYS = 3;
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+  const DAY_MS = 24 * 60 * 60 * 1000;
   const LOCK_MS = LINEUP_LOCK_MINUTES * 60 * 1000;
-  const anchor = new Date(Date.now() + ANCHOR_DAYS * 24 * 60 * 60 * 1000);
-  anchor.setUTCHours(18, 0, 0, 0);
-  const kickoffOf = (matchday: number) => new Date(anchor.getTime() + (matchday - 1) * WEEK_MS);
+  // Ancla: el primer VIERNES ≥ hoy+ANCHOR_DAYS, a las 19:00 UTC (~21:00 en España, viernes noche).
+  const base = new Date(Date.now() + ANCHOR_DAYS * DAY_MS);
+  const daysToFriday = (5 - base.getUTCDay() + 7) % 7; // getUTCDay(): 0=Dom … 5=Vie … 6=Sáb
+  const anchor = new Date(base.getTime() + daysToFriday * DAY_MS);
+  anchor.setUTCHours(19, 0, 0, 0);
 
   const matchdays = [...new Set(fixtures.map((f) => f.matchday))].sort((a, b) => a - b);
+  const mdIndex = new Map(matchdays.map((md, i) => [md, i]));
+  // Primer kickoff REAL de cada jornada, para medir los desfases internos (delta por partido).
+  const realFirst = new Map<number, number>();
+  for (const f of fixtures) {
+    const t = new Date(f.kickoff).getTime();
+    if (!Number.isFinite(t)) continue;
+    const cur = realFirst.get(f.matchday);
+    if (cur === undefined || t < cur) realFirst.set(f.matchday, t);
+  }
+  const startOf = (matchday: number) => anchor.getTime() + (mdIndex.get(matchday) ?? Math.max(0, matchday - 1)) * WEEK_MS;
+  const kickoffOfFixture = (f: (typeof fixtures)[number]): Date => {
+    const start = startOf(f.matchday);
+    const t = new Date(f.kickoff).getTime();
+    const first = realFirst.get(f.matchday);
+    // Conserva el desfase real dentro de la jornada; si falta la fecha real, cae al inicio.
+    return new Date(Number.isFinite(t) && first !== undefined ? start + (t - first) : start);
+  };
+
   const gameweekId = new Map<number, string>();
   for (const matchday of matchdays) {
-    const kickoff = kickoffOf(matchday);
+    const deadline = new Date(startOf(matchday) - LOCK_MS); // 30 min antes del 1er partido
     const id = await mapOrCreate("gameweek", `${comp.externalId}-${comp.season}-gw${matchday}`, () =>
-      prisma.gameweek.create({
-        data: { seasonId, number: matchday, deadline: new Date(kickoff.getTime() - LOCK_MS) },
-      }),
+      prisma.gameweek.create({ data: { seasonId, number: matchday, deadline } }),
     );
+    // Refresca el deadline si la jornada aún no se jugó (re-anclado sin reinicializar).
+    await prisma.gameweek.updateMany({ where: { id, status: { not: "FINISHED" } }, data: { deadline } });
     gameweekId.set(matchday, id);
   }
 
   let matches = 0;
   for (const f of fixtures) {
-    await mapOrCreate("match", f.externalId, () =>
+    const kickoff = kickoffOfFixture(f);
+    const mid = await mapOrCreate("match", f.externalId, () =>
       prisma.match.create({
         data: {
           seasonId,
           gameweekId: gameweekId.get(f.matchday)!,
           homeTeamId: teamId.get(f.homeTeamExternalId)!,
           awayTeamId: teamId.get(f.awayTeamExternalId)!,
-          kickoff: kickoffOf(f.matchday),
+          kickoff,
           status: "SCHEDULED",
         },
       }),
     );
+    // Refresca el kickoff si el partido aún no se jugó.
+    await prisma.match.updateMany({ where: { id: mid, status: { not: "FINISHED" } }, data: { kickoff } });
     matches++;
   }
 

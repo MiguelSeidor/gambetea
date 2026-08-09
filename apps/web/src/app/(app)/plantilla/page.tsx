@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/components/AppProvider";
 import Modal from "@/components/Modal";
 import { eur } from "@/lib/format";
-import { api, POS_SHORT, type InsuranceTier, type PlayerPos, type RosterPlayer } from "@/lib/api";
+import { api, POS_SHORT, type InsuranceTier, type InsuranceTierInfo, type PlayerPos, type RosterPlayer } from "@/lib/api";
 import TeamCrest from "@/components/TeamCrest";
 
 const ORDER: PlayerPos[] = ["GK", "DEF", "MID", "FWD"];
@@ -18,12 +18,14 @@ const TIERS: { value: InsuranceTier; label: string }[] = [
 export default function Plantilla() {
   const { leagueId, team } = useApp();
   const [insurance, setInsurance] = useState<Map<string, InsuranceTier>>(new Map());
+  const [insInfo, setInsInfo] = useState<Map<InsuranceTier, InsuranceTierInfo>>(new Map());
   const [busy, setBusy] = useState<string | null>(null);
   const [pending, setPending] = useState<{ playerId: string; tier: InsuranceTier | "" } | null>(null);
 
   const load = useCallback(async () => {
-    const policies = await api.insurances(leagueId);
+    const [policies, rules] = await Promise.all([api.insurances(leagueId), api.rules()]);
     setInsurance(new Map(policies.map((p) => [p.playerId, p.tier])));
+    setInsInfo(new Map(rules.insurance.map((i) => [i.tier, i])));
   }, [leagueId]);
   useEffect(() => { void load(); }, [load]);
 
@@ -97,7 +99,14 @@ export default function Plantilla() {
                     aria-label={`Seguro de ${p.name}`}
                   >
                     <option value="">Sin seguro</option>
-                    {TIERS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    {TIERS.map((t) => {
+                      const info = insInfo.get(t.value);
+                      return (
+                        <option key={t.value} value={t.value}>
+                          {t.label}{info ? ` · ${eur(info.perGameweek)}/jornada` : ""}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               ))}
@@ -136,7 +145,10 @@ export default function Plantilla() {
         ) : (
           <p>
             Vas a contratar el seguro <b>«{pendingTierLabel}»</b> para <b>{pendingPlayer?.name}</b>.
-            Se cobra el coste anual <b>prorrateado por jornada</b> y es <b>contractual</b>: se pierde si vendes o traspasas al jugador.
+            {pending && insInfo.get(pending.tier) && (
+              <> Coste: <b>{eur(insInfo.get(pending.tier)!.perGameweek)}/jornada</b> ({eur(insInfo.get(pending.tier)!.annualCost)} anual, prorrateado).</>
+            )}
+            {" "}Es <b>contractual</b>: se pierde si vendes o traspasas al jugador.
           </p>
         )}
       </Modal>

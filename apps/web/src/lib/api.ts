@@ -193,10 +193,17 @@ export interface StandingRow {
   played: number;
   points: number;
 }
+export interface InsuranceTierInfo {
+  tier: InsuranceTier;
+  bonus: number;
+  annualCost: number;
+  perGameweek: number;
+}
 export interface FantasyRules {
   squadSize: number;
   composition: Record<PlayerPos, number>;
   formations: Record<string, Record<"DEF" | "MID" | "FWD", number>>;
+  insurance: InsuranceTierInfo[];
 }
 export interface GameweekRow {
   id: string;

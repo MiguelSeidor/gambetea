@@ -36,6 +36,11 @@ export class LeagueScoringController {
     return this.scoring.getStandings(user.id, leagueId);
   }
 
+  @Get("team/gameweeks")
+  teamGameweeks(@CurrentUser() user: AuthUser, @Param("leagueId") leagueId: string) {
+    return this.scoring.getTeamGameweeks(user.id, leagueId);
+  }
+
   @Get("team/gameweek/:gameweekId")
   teamGameweek(
     @CurrentUser() user: AuthUser,

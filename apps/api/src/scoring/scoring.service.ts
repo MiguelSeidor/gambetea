@@ -4,7 +4,7 @@ import { COMPENSATION_STEP, INSURANCE, PRIZE_PER_POINT, type InsuranceTier } fro
 import { attendanceRate } from "../stadium/stadium.rules";
 import { CoachScoringService } from "./coach-scoring.service";
 import { coachPointsFromFacts, defaultCoachConfig, mergeCoachConfig } from "./coach.rules";
-import { defaultPlayerConfig, mergePlayerConfig, passBandPoints, playerPointsFromFacts } from "./player.rules";
+import { defaultPlayerConfig, mergePlayerConfig, passBandPoints, playerBreakdown, playerPointsFromFacts, PLAYER_CRITERIA } from "./player.rules";
 import { Pos } from "./scoring.rules";
 
 const DEFAULT_FORMATION = "4-3-3";
@@ -610,13 +610,23 @@ export class ScoringService {
     const nameOf = new Map(players.map((p) => [p.id, p]));
     // Puntos del jugador SEGÚN el baremo de esta liga (ADR-015).
     const cfg = mergePlayerConfig(settings?.playerCriteria);
-    const line = (id: string) => ({
-      id,
-      name: nameOf.get(id)?.name ?? "?",
-      position: nameOf.get(id)?.position ?? "?",
-      points: playerPointsFromFacts(factsOf.get(id) ?? {}, (nameOf.get(id)?.position as Pos) ?? "MID", cfg),
-      isCaptain: id === lineup.captainId,
-    });
+    const critLabel = new Map(PLAYER_CRITERIA.map((c) => [c.key, c.label]));
+    const line = (id: string) => {
+      const facts = factsOf.get(id) ?? {};
+      const pos = (nameOf.get(id)?.position as Pos) ?? "MID";
+      // Desglose exacto: qué concepto sumó/restó cuántos puntos (con la cantidad del hecho).
+      const breakdown = Object.entries(playerBreakdown(facts, pos, cfg))
+        .map(([key, points]) => ({ key, label: critLabel.get(key) ?? key, qty: facts[key] ?? 0, points }))
+        .sort((a, b) => Math.abs(b.points) - Math.abs(a.points));
+      return {
+        id,
+        name: nameOf.get(id)?.name ?? "?",
+        position: nameOf.get(id)?.position ?? "?",
+        points: playerPointsFromFacts(facts, pos, cfg),
+        isCaptain: id === lineup.captainId,
+        breakdown,
+      };
+    };
 
     return {
       gameweekId,
@@ -625,6 +635,33 @@ export class ScoringService {
       starters: lineup.slots.filter((s) => s.role === "STARTER").map((s) => line(s.playerId)),
       bench: lineup.slots.filter((s) => s.role === "BENCH").map((s) => line(s.playerId)),
     };
+  }
+
+  /** Registro de jornadas del equipo del usuario en la liga: nº, estado, deadline y puntos. */
+  async getTeamGameweeks(userId: string, leagueId: string) {
+    const { teamId } = await this.assertMember(userId, leagueId);
+    const league = await this.prisma.league.findUnique({ where: { id: leagueId }, select: { seasonId: true } });
+    if (!league) throw new NotFoundException("Liga no encontrada");
+    const [gws, scores] = await Promise.all([
+      this.prisma.gameweek.findMany({
+        where: { seasonId: league.seasonId },
+        orderBy: { number: "asc" },
+        select: { id: true, number: true, status: true, deadline: true },
+      }),
+      this.prisma.fantasyGameweekScore.findMany({
+        where: { fantasyTeamId: teamId },
+        select: { gameweekId: true, points: true, eligible: true },
+      }),
+    ]);
+    const scoreOf = new Map(scores.map((s) => [s.gameweekId, s]));
+    return gws.map((g) => ({
+      gameweekId: g.id,
+      number: g.number,
+      status: g.status,
+      deadline: g.deadline,
+      points: scoreOf.get(g.id)?.points ?? null,
+      eligible: scoreOf.get(g.id)?.eligible ?? null,
+    }));
   }
 
   // === Helpers =================================================================

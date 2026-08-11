@@ -2,7 +2,7 @@
 type Name =
   | "dashboard" | "squad" | "pitch" | "market" | "coach" | "stadium"
   | "table" | "logout" | "bell" | "search" | "chevron" | "spark" | "wallet" | "shield" | "book"
-  | "more" | "close";
+  | "more" | "close" | "list";
 
 const paths: Record<Name, React.ReactNode> = {
   dashboard: <><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></>,
@@ -22,6 +22,7 @@ const paths: Record<Name, React.ReactNode> = {
   book: <><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" /><path d="M4 19V5" /><path d="M9 7h7M9 11h7" /></>,
   more: <><rect x="4" y="4" width="6" height="6" rx="1.6" /><rect x="14" y="4" width="6" height="6" rx="1.6" /><rect x="4" y="14" width="6" height="6" rx="1.6" /><rect x="14" y="14" width="6" height="6" rx="1.6" /></>,
   close: <path d="M6 6l12 12M18 6L6 18" />,
+  list: <><path d="M8 6h13M8 12h13M8 18h13" /><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01" /></>,
 };
 
 export default function Icon({ name, size = 20 }: { name: Name; size?: number }) {

@@ -254,6 +254,29 @@ export const TX_LABEL: Record<TransactionRow["type"], string> = {
   LOAN: "Préstamo", LOAN_REPAY: "Cuota préstamo", STADIUM: "Estadio", COACH: "Entrenador",
   ADJUST: "Ajuste", COMPENSATION: "Compensación",
 };
+export interface TeamGameweekRow {
+  gameweekId: string;
+  number: number;
+  status: string;
+  deadline: string;
+  points: number | null;
+  eligible: boolean | null;
+}
+export interface GameweekPlayerLine {
+  id: string;
+  name: string;
+  position: string;
+  points: number;
+  isCaptain: boolean;
+  breakdown: { key: string; label: string; qty: number; points: number }[];
+}
+export interface TeamGameweekDetail {
+  gameweekId: string;
+  formation: string;
+  total: number | null;
+  starters: GameweekPlayerLine[];
+  bench: GameweekPlayerLine[];
+}
 export type InsuranceTier = "BASIC" | "MEDIUM" | "ADVANCED";
 export interface Loan {
   id: string;
@@ -399,6 +422,9 @@ export const api = {
   ) => request<LineupView>(`/leagues/${leagueId}/team/lineup`, { method: "PUT", body }),
 
   standings: (leagueId: string) => request<StandingRow[]>(`/leagues/${leagueId}/standings`),
+  teamGameweeks: (leagueId: string) => request<TeamGameweekRow[]>(`/leagues/${leagueId}/team/gameweeks`),
+  teamGameweek: (leagueId: string, gameweekId: string) =>
+    request<TeamGameweekDetail>(`/leagues/${leagueId}/team/gameweek/${gameweekId}`),
   rules: () => request<FantasyRules>("/fantasy/rules"),
 
   // Mercado

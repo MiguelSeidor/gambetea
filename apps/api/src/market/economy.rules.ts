@@ -75,10 +75,12 @@ export function frenchInstallment(principal: number, i: number, n: number): numb
 
 // --- Seguro médico (ADR-012) ------------------------------------------------
 export type InsuranceTier = "BASIC" | "MEDIUM" | "ADVANCED";
+// Coste recalibrado al alza (petición del owner): básico ×100, medio ×300, avanzado ×500 sobre
+// el coste anual base. El prorrateo por jornada (anual/38) lo aplica economy.service.
 export const INSURANCE: Record<InsuranceTier, { bonus: number; annualCost: number }> = {
-  BASIC: { bonus: 1, annualCost: 10_000 },
-  MEDIUM: { bonus: 3, annualCost: 20_000 },
-  ADVANCED: { bonus: 5, annualCost: 30_000 },
+  BASIC: { bonus: 1, annualCost: 10_000 * 100 }, // 1.000.000/año ≈ 26.316/jornada
+  MEDIUM: { bonus: 3, annualCost: 20_000 * 300 }, // 6.000.000/año ≈ 157.895/jornada
+  ADVANCED: { bonus: 5, annualCost: 30_000 * 500 }, // 15.000.000/año ≈ 394.737/jornada
 };
 
 /** Nº de jugadores agentes libres que se listan al generar un mercado. */

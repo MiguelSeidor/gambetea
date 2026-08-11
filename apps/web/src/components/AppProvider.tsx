@@ -8,6 +8,7 @@ import ChangePasswordModal from "@/components/ChangePasswordModal";
 import {
   api,
   clearSession,
+  getLeagueId,
   getToken,
   getUser,
   setLeagueId,
@@ -69,7 +70,15 @@ export default function AppProvider({ children }: { children: React.ReactNode })
       }
       const ls = await api.myLeagues();
       setLeagues(ls);
-      // Usuario normal: siempre al lobby para elegir liga (entrar / crear / unirse).
+      // Restaura la ÚLTIMA liga elegida (persistida en localStorage) si sigue siendo válida, para
+      // NO volver al lobby en cada navegación/recarga/deeplink. Si no hay o ya no existe → lobby.
+      const stored = getLeagueId();
+      if (stored && ls.some((l) => l.id === stored)) {
+        setLid(stored);
+        await loadLeagueData(stored);
+        setPhase("ready");
+        return;
+      }
       setPhase("lobby");
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Error");
@@ -106,6 +115,7 @@ export default function AppProvider({ children }: { children: React.ReactNode })
   }, [leagueId, loadLeagueData]);
 
   const goToLobby = useCallback(() => {
+    setLeagueId(""); // olvida la liga persistida para que el lobby "aguante" (no se auto-restaure)
     setLid("");
     setTeam(null);
     setPhase("lobby");

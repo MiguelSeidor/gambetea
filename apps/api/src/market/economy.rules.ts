@@ -99,3 +99,28 @@ export const MIN_MARKET_COACHES = 2;
 export function computeValue(rating: number, seasonPoints: number): number {
   return Math.max(MIN_VALUE, ratingBaseValue(rating) + seasonPoints * POINTS_VALUE_FACTOR);
 }
+
+// --- Fluctuación del valor (ADR-022) ----------------------------------------
+/** Peso EXTRA de los puntos de la última jornada (además del punto acumulado): recencia 3×F. */
+export const RECENCY_EXTRA_FACTOR = 2 * POINTS_VALUE_FACTOR;
+/** Variación máxima del valor por día (±). Suaviza la fluctuación y evita saltos absurdos. */
+export const DAILY_VALUE_CAP = 0.08;
+/** Oferta/demanda (v1, ligera): cada puja reciente sube y estar en venta baja, como % del valor base. */
+export const PRESSURE_PER_BID = 0.02;
+export const PRESSURE_LISTED = 0.03;
+export const PRESSURE_CAP = 0.1;
+
+/** Valor OBJETIVO de un jugador: calidad + rendimiento (con recencia) + presión de mercado. */
+export function targetPlayerValue(rating: number, seasonPoints: number, lastGwPoints: number, marketPressure: number): number {
+  const base = ratingBaseValue(rating) + seasonPoints * POINTS_VALUE_FACTOR + lastGwPoints * RECENCY_EXTRA_FACTOR + marketPressure;
+  return Math.max(MIN_VALUE, Math.round(base));
+}
+
+/** Aplica el tope diario (±DAILY_VALUE_CAP) al acercar `value` desde `old` hacia `target`.
+ *  En la primera valoración (old ≤ 0) se fija el objetivo directamente. */
+export function cappedValue(oldValue: number, target: number): number {
+  if (oldValue <= 0) return Math.max(MIN_VALUE, target);
+  const up = Math.round(oldValue * (1 + DAILY_VALUE_CAP));
+  const down = Math.round(oldValue * (1 - DAILY_VALUE_CAP));
+  return Math.max(MIN_VALUE, Math.min(up, Math.max(down, target)));
+}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/components/AppProvider";
 import { api, POS_SHORT, TX_LABEL, type LeaguePlayer, type MarketListing, type PlayerPos, type TransactionRow } from "@/lib/api";
 import TeamCrest from "@/components/TeamCrest";
+import ValueDelta from "@/components/ValueDelta";
 import { eur } from "@/lib/format";
 
 type Tab = "free" | "league" | "activity";
@@ -148,7 +149,7 @@ export default function Mercado() {
                 <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>{l.asset.name}<Status p={l.asset} /></div>
                 <div className="muted" style={{ fontSize: ".82rem", display: "flex", alignItems: "center", gap: 6 }}><TeamCrest teamId={l.asset.teamId} name={l.asset.clubName} short={l.asset.club} size={20} />{l.asset.clubName ?? l.asset.club ?? "—"}</div>
                 <div className="mkt-meta">
-                  <div className="m"><div className="l">Valor</div><div className="val">{eur(l.asset.value)}</div></div>
+                  <div className="m"><div className="l">Valor</div><div className="val">{eur(l.asset.value)}</div><ValueDelta delta={l.asset.valueDelta} /></div>
                   <div className="m"><div className="l">Puntos</div><div className="val">{l.asset.points}</div></div>
                   <div className="m"><div className="l">Salida</div><div className="val">{eur(l.askingPrice)}</div></div>
                 </div>
@@ -182,7 +183,7 @@ export default function Mercado() {
                   </td>
                   <td className="muted">{p.mine ? "Tú" : p.ownerTeamName}</td>
                   <td className="num">{p.points}</td>
-                  <td className="num">{eur(p.value)}</td>
+                  <td className="num" style={{ whiteSpace: "nowrap" }}>{eur(p.value)}<br /><ValueDelta delta={p.valueDelta} /></td>
                   <td className="num">{eur(p.clause)}</td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                     {p.mine ? (

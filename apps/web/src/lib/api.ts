@@ -121,6 +121,7 @@ export interface RosterPlayer {
   club: string | null;
   clubName: string | null;
   value: number;
+  valueDelta: number;
   purchasePrice: number;
   points: number;
   injured: boolean;
@@ -215,7 +216,7 @@ export interface GameweekRow {
 export interface MarketListing {
   listingId: string;
   kind: "PLAYER" | "COACH";
-  asset: { id: string; name: string; position: PlayerPos | null; teamId: string | null; club: string | null; clubName: string | null; value: number; points: number; injured: boolean; suspended: boolean };
+  asset: { id: string; name: string; position: PlayerPos | null; teamId: string | null; club: string | null; clubName: string | null; value: number; valueDelta: number; points: number; injured: boolean; suspended: boolean };
   askingPrice: number;
   closesAt: string;
   freeAgent: boolean;
@@ -229,6 +230,7 @@ export interface LeaguePlayer {
   club: string | null;
   clubName: string | null;
   value: number;
+  valueDelta: number;
   clause: number;
   ownerTeamId: string;
   ownerTeamName: string;

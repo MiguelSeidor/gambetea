@@ -132,6 +132,7 @@ model Player {
   status     PlayerStatus @default(ACTIVE) // ciclo de vida en el Hub (ADR-018)
   rating     Int      @default(70) // calidad intrínseca (55-94) → base del valor de mercado
   value      Int      @default(0) // valor de mercado (€), calculado — ADR-009
+  valueDelta Int      @default(0) // variación del valor en el último recálculo diario (ADR-022)
   injuries   Injury[]
   suspensions Suspension[]
   appearances Appearance[]
@@ -149,6 +150,7 @@ model Coach {
   team     Team?  @relation(fields: [teamId], references: [id], onDelete: SetNull)
   name     String
   value    Int    @default(0) // valor de mercado (€) — ADR-009/011
+  valueDelta Int  @default(0) // variación del valor en el último recálculo diario (ADR-022)
   gwScores CoachGameweekScore[]
   rosterOf RosterCoach[]
   listings CoachListing[]

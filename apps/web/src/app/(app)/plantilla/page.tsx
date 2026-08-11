@@ -6,6 +6,7 @@ import Modal from "@/components/Modal";
 import { eur } from "@/lib/format";
 import { api, POS_SHORT, type InsuranceTier, type InsuranceTierInfo, type PlayerPos, type RosterPlayer, type Shield } from "@/lib/api";
 import TeamCrest from "@/components/TeamCrest";
+import ValueDelta from "@/components/ValueDelta";
 
 const ORDER: PlayerPos[] = ["GK", "DEF", "MID", "FWD"];
 const LABEL: Record<PlayerPos, string> = { GK: "Porteros", DEF: "Defensas", MID: "Centrocampistas", FWD: "Delanteros" };
@@ -123,7 +124,7 @@ export default function Plantilla() {
                     {p.injured && <span title="Lesionado" style={{ marginLeft: 6 }}>🩹</span>}
                     {p.suspended && <span title="Sancionado" style={{ marginLeft: 4 }}>🟥</span>}
                     <small>
-                      <TeamCrest teamId={p.teamId} name={p.clubName} short={p.club} /> · {eur(p.value)}
+                      <TeamCrest teamId={p.teamId} name={p.clubName} short={p.club} /> · {eur(p.value)}<ValueDelta delta={p.valueDelta} />
                       {shields.get(p.id) && (
                         <span style={{ color: "#a78bfa", marginLeft: 6 }} title={shields.get(p.id)!.autoRenew ? "Blindado (se renueva solo)" : "Blindaje sin renovar: caduca en la fecha indicada"}>
                           🛡 {fmtDay(shields.get(p.id)!.expiresAt)}{!shields.get(p.id)!.autoRenew && " · fin"}

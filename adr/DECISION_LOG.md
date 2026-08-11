@@ -26,6 +26,7 @@
 | [019](ADR-019.md) | Adaptador api-football (datos reales, capa gratuita) + estrategia de prueba con temporada pasada | Propuesto | 0→1 | 2026-07-31 |
 | [020](ADR-020.md) | Aplazamientos: liquidación parcial (delta) por partido (extiende ADR-010) | Aceptado | 6→1 | 2026-08-09 |
 | [021](ADR-021.md) | Blindaje: protección de cláusula con coste semanal (valor de mercado) | Aceptado | 8 | 2026-08-11 |
+| [022](ADR-022.md) | Fluctuación del valor: rendimiento (recencia) + oferta/demanda + delta visible | Propuesto | 8 | 2026-08-11 |
 
 ## Cómo se usa
 

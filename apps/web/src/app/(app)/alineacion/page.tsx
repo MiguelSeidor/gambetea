@@ -49,7 +49,10 @@ export default function Alineacion() {
   const playerById = new Map(team.players.map((p) => [p.id, p]));
   const startersByPos = (pos: PlayerPos) => starters.filter((id) => playerById.get(id)?.position === pos);
   const countOf = (pos: PlayerPos) => startersByPos(pos).length;
-  const valid = starters.length === 11 && POS_ORDER.every((p) => countOf(p) === need[p]);
+  // Se puede guardar con HUECOS (plazas vacías), pero NO con exceso en una posición ni >11.
+  const overfilled = POS_ORDER.some((p) => countOf(p) > need[p]);
+  const complete = starters.length === 11 && POS_ORDER.every((p) => countOf(p) === need[p]);
+  const canSave = starters.length > 0 && starters.length <= 11 && !overfilled;
   const benchOptions = team.players.filter((p) => !starters.includes(p.id));
 
   function autoFill(f: string) {
@@ -84,7 +87,7 @@ export default function Alineacion() {
   }
 
   async function save() {
-    if (!valid) return;
+    if (!canSave) return;
     setSaving(true);
     setMsg(null);
     try {
@@ -97,7 +100,7 @@ export default function Alineacion() {
         coachId: chosenCoach || undefined,
       });
       setLineup(saved);
-      setMsg({ text: "Alineación guardada", ok: true });
+      setMsg(complete ? { text: "Alineación guardada", ok: true } : { text: "Guardada con huecos: penalizará esta jornada", ok: false });
     } catch (err) {
       setMsg({ text: err instanceof Error ? err.message : "Error al guardar", ok: false });
     } finally {
@@ -149,10 +152,10 @@ export default function Alineacion() {
           </div>
 
           {POS_ORDER.map((pos) => (
-            <div className="xi-group" key={pos}>
+            <div className={`xi-group${editable && countOf(pos) < need[pos] ? " short" : ""}`} key={pos}>
               <div className="gh">
                 <span className="lab">{POS_LABEL[pos]}</span>
-                <span className={`cnt${countOf(pos) === need[pos] ? " full" : ""}`}>{countOf(pos)}/{need[pos]}</span>
+                <span className={`cnt${countOf(pos) === need[pos] ? " full" : countOf(pos) < need[pos] ? " short" : ""}`}>{countOf(pos)}/{need[pos]}</span>
               </div>
               <div className="chips">
                 {team.players.filter((p) => p.position === pos).map((p) => (
@@ -182,12 +185,18 @@ export default function Alineacion() {
             </select>
           </div>
 
+          {editable && !complete && (
+            <div className="lineup-warn">
+              ⚠️ Tienes posiciones sin cubrir. Una plaza vacía <b>no puntúa</b>: perderás puntos esa jornada.
+            </div>
+          )}
+
           <div className="save-bar">
             <select value={captainId} onChange={(e) => setCaptainId(e.target.value)} disabled={!editable} aria-label="Capitán">
               <option value="">Sin capitán</option>
               {starters.map((id) => <option key={id} value={id}>★ {playerById.get(id)?.name}</option>)}
             </select>
-            <button className="btn" onClick={save} disabled={!editable || !valid || saving}>
+            <button className="btn" onClick={save} disabled={!editable || !canSave || saving}>
               <span>{saving ? "Guardando…" : "Guardar alineación"}</span>
             </button>
             {msg && <span className={`msg ${msg.ok ? "ok" : "err"}`}>{msg.text}</span>}

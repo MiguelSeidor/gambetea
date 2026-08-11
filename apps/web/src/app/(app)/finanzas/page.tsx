@@ -2,17 +2,25 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/components/AppProvider";
-import { api, type Loan } from "@/lib/api";
+import { api, TX_LABEL, type Loan, type TransactionRow } from "@/lib/api";
 import { eur } from "@/lib/format";
+
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export default function Finanzas() {
   const { leagueId, team, refresh } = useApp();
   const [loans, setLoans] = useState<Loan[] | null>(null);
+  const [txs, setTxs] = useState<TransactionRow[] | null>(null);
   const [amount, setAmount] = useState<number>(10_000_000);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
 
-  const load = useCallback(async () => setLoans(await api.loans(leagueId)), [leagueId]);
+  const load = useCallback(async () => {
+    const [ln, tx] = await Promise.all([api.loans(leagueId), api.transactions(leagueId)]);
+    setLoans(ln);
+    setTxs(tx);
+  }, [leagueId]);
   useEffect(() => { void load(); }, [load]);
 
   if (!team) return null;
@@ -92,6 +100,32 @@ export default function Finanzas() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="card pad0">
+        <div className="card-head" style={{ padding: "22px 22px 0" }}>
+          <h3>Últimos movimientos</h3>
+          <span className="muted" style={{ fontSize: ".82rem" }}>primas, salarios, seguros, fichajes…</span>
+        </div>
+        <table className="table" style={{ marginTop: 10 }}>
+          <thead>
+            <tr><th>Concepto</th><th>Detalle</th><th>Fecha</th><th style={{ textAlign: "right" }}>Importe</th></tr>
+          </thead>
+          <tbody>
+            {!txs && <tr><td colSpan={4} className="muted">Cargando…</td></tr>}
+            {txs?.length === 0 && <tr><td colSpan={4} className="muted">Sin movimientos todavía.</td></tr>}
+            {txs?.map((t) => (
+              <tr key={t.id}>
+                <td><span className="badge">{TX_LABEL[t.type] ?? t.type}</span></td>
+                <td className="muted" style={{ fontSize: ".85rem" }}>{t.description ?? "—"}</td>
+                <td className="muted" style={{ fontSize: ".82rem", whiteSpace: "nowrap" }}>{fmtDate(t.createdAt)}</td>
+                <td className="num" style={{ color: t.amount >= 0 ? "#4ade80" : "#f87171", whiteSpace: "nowrap" }}>
+                  {t.amount >= 0 ? "+" : "−"}{eur(Math.abs(t.amount))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {toast && <div className={`toast ${toast.ok ? "ok" : "err"}`}>{toast.text}</div>}

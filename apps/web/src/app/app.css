@@ -131,6 +131,12 @@
 .xi-group .gh .lab { font-family: var(--mono); font-size: .64rem; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
 .xi-group .gh .cnt { font-family: var(--mono); font-size: .72rem; color: var(--accent); }
 .xi-group .gh .cnt.full { color: #4ade80; }
+.xi-group .gh .cnt.short { color: #fb923c; }
+/* Posición con hueco (faltan titulares): recuadro naranja de aviso. */
+.xi-group.short { border: 1px solid color-mix(in srgb, #fb923c 55%, transparent); border-radius: 12px;
+  padding: 10px 12px; margin: 0 -2px 14px; background: color-mix(in srgb, #fb923c 7%, transparent); }
+.lineup-warn { font-size: .84rem; color: #fb923c; background: color-mix(in srgb, #fb923c 10%, transparent);
+  border: 1px solid color-mix(in srgb, #fb923c 32%, transparent); border-radius: 10px; padding: 10px 12px; margin: 4px 0 12px; }
 .chips { display: flex; flex-wrap: wrap; gap: 7px; }
 .chip { display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px; border-radius: 10px; cursor: pointer;
   background: var(--bg); border: 1px solid var(--line); font-size: .82rem; transition: border-color .15s, background .15s; }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/components/AppProvider";
-import { api, POS_SHORT, type LeaguePlayer, type MarketListing, type PlayerPos, type TransactionRow } from "@/lib/api";
+import { api, POS_SHORT, TX_LABEL, type LeaguePlayer, type MarketListing, type PlayerPos, type TransactionRow } from "@/lib/api";
 import TeamCrest from "@/components/TeamCrest";
 import { eur } from "@/lib/format";
 
@@ -11,13 +11,6 @@ type PosFilter = PlayerPos | "ALL" | "DT";
 const POS_FREE: PosFilter[] = ["ALL", "GK", "DEF", "MID", "FWD", "DT"];
 const POS_LEAGUE: PosFilter[] = ["ALL", "GK", "DEF", "MID", "FWD"];
 const POS_LABEL: Record<string, string> = { ALL: "Todas", GK: "POR", DEF: "DEF", MID: "CEN", FWD: "DEL", DT: "ENT (entrenadores)" };
-
-// Etiquetas legibles para el desglose de "Mi actividad".
-const TX_LABEL: Record<TransactionRow["type"], string> = {
-  BUY: "Compra", SELL: "Venta", PRIZE: "Prima", SALARY: "Salario", INSURANCE: "Seguro",
-  LOAN: "Préstamo", LOAN_REPAY: "Cuota préstamo", STADIUM: "Estadio", COACH: "Entrenador",
-  ADJUST: "Ajuste", COMPENSATION: "Compensación",
-};
 
 const Status = ({ p }: { p: { injured: boolean; suspended: boolean } }) => (
   <>

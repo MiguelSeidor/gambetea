@@ -169,7 +169,22 @@ export class FantasyTeamService {
 
     const gameweek = { id: gw.id, number: gw.number, status: gw.status, deadline: gw.deadline };
     if (!lineup) {
-      return { gameweek, formation: DEFAULT_FORMATION, captainId: null, coachId: null, starters: [], bench: [] };
+      // Sin alineación para esta jornada: si es una jornada POR JUGAR, arrastramos la ÚLTIMA
+      // alineación guardada (la persistimos), filtrada a la plantilla actual — los jugadores que
+      // ya no tienes dejan HUECO. Así la alineación se mantiene entre jornadas en vez de vaciarse.
+      const seeded = gw.status !== "FINISHED" ? await this.seedLineupFromPrevious(team.id, gw.id) : null;
+      if (!seeded) {
+        return { gameweek, formation: DEFAULT_FORMATION, captainId: null, coachId: null, starters: [], bench: [] };
+      }
+      const info = await this.playerInfo(seeded.slots.map((s) => s.playerId), seasonId);
+      return {
+        gameweek,
+        formation: seeded.formation,
+        captainId: seeded.captainId,
+        coachId: seeded.coachId,
+        starters: seeded.slots.filter((s) => s.role === "STARTER").map((s) => info[s.playerId]),
+        bench: seeded.slots.filter((s) => s.role === "BENCH").map((s) => info[s.playerId]),
+      };
     }
     const playerIds = lineup.slots.map((s) => s.playerId);
     const info = await this.playerInfo(playerIds, seasonId);
@@ -240,6 +255,48 @@ export class FantasyTeamService {
 
   // --- Helpers -----------------------------------------------------------------
 
+  /** Copia la última alineación guardada del equipo a `targetGwId` (persistida), filtrando a la
+   *  plantilla actual: los jugadores que ya no tienes dejan hueco. Devuelve la creada, o null. */
+  private async seedLineupFromPrevious(teamId: string, targetGwId: string) {
+    const prev = await this.prisma.fantasyLineup.findFirst({
+      where: { fantasyTeamId: teamId, gameweekId: { not: targetGwId }, slots: { some: {} } },
+      orderBy: { gameweek: { number: "desc" } },
+      include: { slots: { orderBy: { order: "asc" } } },
+    });
+    if (!prev) return null;
+    const roster = await this.prisma.rosterPlayer.findMany({ where: { fantasyTeamId: teamId }, select: { playerId: true } });
+    const owned = new Set(roster.map((r) => r.playerId));
+    const starters = prev.slots.filter((s) => s.role === "STARTER" && owned.has(s.playerId)).map((s) => s.playerId);
+    const bench = prev.slots.filter((s) => s.role === "BENCH" && owned.has(s.playerId)).map((s) => s.playerId);
+    const coachOwned = prev.coachId
+      ? (await this.prisma.rosterCoach.count({ where: { fantasyTeamId: teamId, coachId: prev.coachId } })) > 0
+      : false;
+    try {
+      return await this.prisma.fantasyLineup.create({
+        data: {
+          fantasyTeamId: teamId,
+          gameweekId: targetGwId,
+          formation: prev.formation,
+          captainId: prev.captainId && owned.has(prev.captainId) ? prev.captainId : null,
+          coachId: coachOwned ? prev.coachId : null,
+          slots: {
+            create: [
+              ...starters.map((playerId, i) => ({ playerId, role: "STARTER" as const, order: i + 1 })),
+              ...bench.map((playerId, i) => ({ playerId, role: "BENCH" as const, order: i + 1 })),
+            ],
+          },
+        },
+        include: { slots: { orderBy: { order: "asc" } } },
+      });
+    } catch {
+      // Carrera: otra petición ya la creó → devolvemos la existente.
+      return this.prisma.fantasyLineup.findUnique({
+        where: { fantasyTeamId_gameweekId: { fantasyTeamId: teamId, gameweekId: targetGwId } },
+        include: { slots: { orderBy: { order: "asc" } } },
+      });
+    }
+  }
+
   private validateLineup(dto: SaveLineupDto, posOf: Map<string, Position>) {
     const all = [...dto.starters, ...dto.bench];
     const unique = new Set(all);
@@ -252,14 +309,19 @@ export class FantasyTeamService {
         throw new BadRequestException("Un jugador seleccionado no pertenece a tu plantilla");
       }
     }
-    // Recuento por posición de los titulares == formación.
+    // Recuento por posición: los titulares NO pueden EXCEDER la formación, pero SÍ pueden faltar
+    // (hueco). Una plaza vacía penaliza (no puntúa) pero se permite guardar la alineación así
+    // —el usuario decide—; la advertencia se muestra en el frontend.
     const required = formationCounts(dto.formation);
     const actual: Record<Position, number> = { GK: 0, DEF: 0, MID: 0, FWD: 0 };
     for (const id of dto.starters) actual[posOf.get(id)!]++;
+    if (dto.starters.length > 11) {
+      throw new BadRequestException("No puedes alinear más de 11 titulares");
+    }
     for (const pos of Object.keys(required) as Position[]) {
-      if (actual[pos] !== required[pos]) {
+      if (actual[pos] > required[pos]) {
         throw new BadRequestException(
-          `Los titulares no cuadran con la formación ${dto.formation}: ${pos} ${actual[pos]}/${required[pos]}`,
+          `Demasiados ${pos} para la formación ${dto.formation}: ${actual[pos]}/${required[pos]}`,
         );
       }
     }

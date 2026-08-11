@@ -248,6 +248,12 @@ export interface TransactionRow {
   description: string | null;
   createdAt: string;
 }
+/** Etiqueta legible por tipo de movimiento (compartida entre Mercado y Finanzas). */
+export const TX_LABEL: Record<TransactionRow["type"], string> = {
+  BUY: "Compra", SELL: "Venta", PRIZE: "Prima", SALARY: "Salario", INSURANCE: "Seguro",
+  LOAN: "Préstamo", LOAN_REPAY: "Cuota préstamo", STADIUM: "Estadio", COACH: "Entrenador",
+  ADJUST: "Ajuste", COMPENSATION: "Compensación",
+};
 export type InsuranceTier = "BASIC" | "MEDIUM" | "ADVANCED";
 export interface Loan {
   id: string;

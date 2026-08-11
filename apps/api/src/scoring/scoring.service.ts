@@ -447,50 +447,70 @@ export class ScoringService {
   }
 
   /**
-   * Reparte la prima económica (€ por punto) a TODOS los equipos según los puntos que
-   * hicieron, incluidos los que estaban en números rojos. Idempotente por jornada.
+   * Asegura que la prima (€/punto) y el ingreso por asistencia de la jornada son los CORRECTOS
+   * según los puntos ACTUALES de cada equipo. En el reparto inicial paga el total; al RECALCULAR
+   * (re-ingesta / recompute) reajusta por la DIFERENCIA respecto a lo ya pagado y deja constancia
+   * con transacciones "(reajuste)". Repetible: si nada cambió, delta 0 → no hace nada.
    */
   async awardPrizes(gameweekId: string): Promise<number> {
-    const already = await this.prisma.transaction.count({ where: { gameweekId, type: "PRIZE" } });
-    if (already > 0) return 0; // ya repartida esta jornada
-
     const scores = await this.prisma.fantasyGameweekScore.findMany({
       where: { gameweekId },
       select: { fantasyTeamId: true, points: true },
     });
+    if (scores.length === 0) return 0;
+    const teamIds = scores.map((s) => s.fantasyTeamId);
+
     // Nivel de estadio de cada equipo → ingreso por asistencia (€/punto).
-    const stadiums = await this.prisma.stadium.findMany({
-      where: { fantasyTeamId: { in: scores.map((s) => s.fantasyTeamId) } },
-      select: { fantasyTeamId: true, level: true },
-    });
+    const stadiums = await this.prisma.stadium.findMany({ where: { fantasyTeamId: { in: teamIds } }, select: { fantasyTeamId: true, level: true } });
     const levelOf = new Map(stadiums.map((s) => [s.fantasyTeamId, s.level]));
     const promos = await this.prisma.teamPromo.findMany({ where: { gameweekId, kind: "DOUBLE_PRIZE" }, select: { fantasyTeamId: true } });
     const doublePrize = new Set(promos.map((p) => p.fantasyTeamId));
     // Prima por punto según la config de la LIGA de cada equipo (ADR-014).
     const cfg = await this.prisma.fantasyTeam.findMany({
-      where: { id: { in: scores.map((s) => s.fantasyTeamId) } },
+      where: { id: { in: teamIds } },
       select: { id: true, membership: { select: { league: { select: { settings: { select: { prizePerPoint: true } } } } } } },
     });
     const prizePerPointOf = new Map(cfg.map((t) => [t.id, t.membership?.league.settings?.prizePerPoint ?? PRIZE_PER_POINT]));
 
-    let paid = 0;
+    // Lo YA pagado por esta jornada (para reajustar por diferencia al recalcular).
+    const paidRows = await this.prisma.transaction.groupBy({
+      by: ["fantasyTeamId", "type"],
+      where: { gameweekId, type: { in: ["PRIZE", "STADIUM"] } },
+      _sum: { amount: true },
+    });
+    const paidOf = new Map<string, number>();
+    for (const r of paidRows) paidOf.set(`${r.fantasyTeamId}:${r.type}`, r._sum.amount ?? 0);
+
+    let changed = 0;
     for (const s of scores) {
       const pts = Math.max(0, s.points);
-      const prize = pts * (prizePerPointOf.get(s.fantasyTeamId) ?? PRIZE_PER_POINT) * (doublePrize.has(s.fantasyTeamId) ? 2 : 1);
-      const attendance = pts * attendanceRate(levelOf.get(s.fantasyTeamId) ?? 0);
-      if (prize + attendance <= 0) continue;
-      await this.prisma.$transaction([
-        this.prisma.fantasyTeam.update({ where: { id: s.fantasyTeamId }, data: { budget: { increment: prize + attendance } } }),
-        this.prisma.transaction.create({
-          data: { fantasyTeamId: s.fantasyTeamId, type: "PRIZE", amount: prize, gameweekId, description: "Prima por puntos de jornada" },
-        }),
-        this.prisma.transaction.create({
-          data: { fantasyTeamId: s.fantasyTeamId, type: "STADIUM", amount: attendance, gameweekId, description: "Ingreso por asistencia" },
-        }),
-      ]);
-      paid++;
+      const targetPrize = pts * (prizePerPointOf.get(s.fantasyTeamId) ?? PRIZE_PER_POINT) * (doublePrize.has(s.fantasyTeamId) ? 2 : 1);
+      const targetAtt = Math.round(pts * attendanceRate(levelOf.get(s.fantasyTeamId) ?? 0));
+      const oldPrize = paidOf.get(`${s.fantasyTeamId}:PRIZE`) ?? 0;
+      const oldAtt = paidOf.get(`${s.fantasyTeamId}:STADIUM`) ?? 0;
+      const dPrize = targetPrize - oldPrize;
+      const dAtt = targetAtt - oldAtt;
+      if (dPrize === 0 && dAtt === 0) continue;
+
+      const ops = [
+        this.prisma.fantasyTeam.update({ where: { id: s.fantasyTeamId }, data: { budget: { increment: dPrize + dAtt } } }),
+      ];
+      if (dPrize !== 0)
+        ops.push(
+          this.prisma.transaction.create({
+            data: { fantasyTeamId: s.fantasyTeamId, type: "PRIZE", amount: dPrize, gameweekId, description: oldPrize === 0 ? "Prima por puntos de jornada" : "Prima por puntos de jornada (reajuste)" },
+          }) as never,
+        );
+      if (dAtt !== 0)
+        ops.push(
+          this.prisma.transaction.create({
+            data: { fantasyTeamId: s.fantasyTeamId, type: "STADIUM", amount: dAtt, gameweekId, description: oldAtt === 0 ? "Ingreso por asistencia" : "Ingreso por asistencia (reajuste)" },
+          }) as never,
+        );
+      await this.prisma.$transaction(ops);
+      changed++;
     }
-    return paid;
+    return changed;
   }
 
   /** Compensación por clasificación (catch-up): (puesto−1) × paso, tras cada jornada. El

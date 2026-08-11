@@ -230,11 +230,13 @@ export class AdminService {
     return { fantasyTeamId: dto.fantasyTeamId, gameweekId: dto.gameweekId, points: row.points };
   }
 
-  /** Recalcula una jornada ya jugada (tras corregir datos del Hub). */
+  /** Recalcula una jornada ya jugada (tras corregir datos del Hub) Y reajusta el dinero: primas
+   *  e ingreso por asistencia se ponen al día por diferencia respecto a lo ya pagado. */
   async recomputeGameweek(adminId: string, gameweekId: string) {
     const result = await this.scoring.computeGameweek(gameweekId);
-    await this.audit(adminId, "gameweek.recompute", gameweekId, { playersScored: result.playersScored, teamsScored: result.teamsScored });
-    return result;
+    const moneyAdjusted = await this.scoring.awardPrizes(gameweekId); // reajuste de primas + asistencia
+    await this.audit(adminId, "gameweek.recompute", gameweekId, { playersScored: result.playersScored, teamsScored: result.teamsScored, moneyAdjusted });
+    return { ...result, moneyAdjusted };
   }
 
   // === Ciclo de vida del jugador (ADR-018) — el Hub reconcilia el vaivén real ===
@@ -358,6 +360,7 @@ export class AdminService {
       for (const gw of played) {
         await playGameweekRecord(this.prisma, provider, gw); // re-ingesta (borra+reinserta apariciones/eventos)
         const r = await this.scoring.computeGameweek(gw.id); // recalcula puntos desde el snapshot
+        await this.scoring.awardPrizes(gw.id); // reajusta primas + ingreso por asistencia por diferencia
         playersScored += r.playersScored;
       }
       await this.audit(adminId, "hub.reingest", null, { gameweeks: played.length, playersScored });

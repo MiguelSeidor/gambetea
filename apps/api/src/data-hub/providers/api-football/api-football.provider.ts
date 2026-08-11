@@ -160,9 +160,14 @@ export class ApiFootballProvider implements FootballDataProvider {
     for (const e of events) {
       const kind = mapEventKind(e);
       if (!kind || !e.player?.id) continue;
-      mappedEvents.push({ minute: (e.time?.elapsed ?? 0) + (e.time?.extra ?? 0), type: kind, playerExternalId: String(e.player.id) });
+      const minute = (e.time?.elapsed ?? 0) + (e.time?.extra ?? 0);
+      mappedEvents.push({ minute, type: kind, playerExternalId: String(e.player.id) });
+      // En api-football el asistente viene en `assist` del evento de gol → lo acreditamos.
+      if (kind === "GOAL" && e.assist?.id) {
+        mappedEvents.push({ minute, type: "ASSIST", playerExternalId: String(e.assist.id) });
+      }
       if (kind === "SUB_IN" && e.assist?.id) {
-        mappedEvents.push({ minute: (e.time?.elapsed ?? 0) + (e.time?.extra ?? 0), type: "SUB_OUT", playerExternalId: String(e.assist.id) });
+        mappedEvents.push({ minute, type: "SUB_OUT", playerExternalId: String(e.assist.id) });
       }
     }
 

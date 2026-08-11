@@ -132,6 +132,12 @@ export class AdminController {
     return this.admin.hubSyncChanges(u.id);
   }
 
+  @Post("hub/reingest")
+  @HttpCode(200)
+  hubReingest(@CurrentUser() u: AuthUser) {
+    return this.admin.hubReingest(u.id);
+  }
+
   // Solicitudes de reseteo de contraseña
   @Get("reset-requests")
   resetRequests() {

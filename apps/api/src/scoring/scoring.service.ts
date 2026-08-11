@@ -3,7 +3,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { COMPENSATION_STEP, INSURANCE, PRIZE_PER_POINT, type InsuranceTier } from "../market/economy.rules";
 import { attendanceRate } from "../stadium/stadium.rules";
 import { CoachScoringService } from "./coach-scoring.service";
-import { coachPointsFromFacts, defaultCoachConfig, mergeCoachConfig } from "./coach.rules";
+import { coachBreakdown, coachPointsFromFacts, COACH_CRITERIA, defaultCoachConfig, mergeCoachConfig } from "./coach.rules";
 import { defaultPlayerConfig, mergePlayerConfig, passBandPoints, playerBreakdown, playerPointsFromFacts, PLAYER_CRITERIA } from "./player.rules";
 import { Pos } from "./scoring.rules";
 
@@ -604,7 +604,7 @@ export class ScoringService {
         where: { fantasyTeamId_gameweekId: { fantasyTeamId: teamId, gameweekId } },
         select: { points: true },
       }),
-      this.prisma.leagueSettings.findUnique({ where: { leagueId }, select: { playerCriteria: true } }),
+      this.prisma.leagueSettings.findUnique({ where: { leagueId }, select: { playerCriteria: true, coachCriteria: true } }),
     ]);
     const factsOf = new Map(scores.map((s) => [s.playerId, (s.breakdown ?? {}) as Record<string, number>]));
     const nameOf = new Map(players.map((p) => [p.id, p]));
@@ -628,12 +628,32 @@ export class ScoringService {
       };
     };
 
+    // Entrenador alineado: sus puntos y desglose por concepto (mismo baremo de la liga).
+    let coach: { id: string; name: string; points: number; breakdown: { key: string; label: string; qty: number; points: number }[] } | null = null;
+    if (lineup.coachId) {
+      const [cScore, cRow] = await Promise.all([
+        this.prisma.coachGameweekScore.findUnique({
+          where: { coachId_gameweekId: { coachId: lineup.coachId, gameweekId } },
+          select: { breakdown: true },
+        }),
+        this.prisma.coach.findUnique({ where: { id: lineup.coachId }, select: { name: true } }),
+      ]);
+      const cfacts = (cScore?.breakdown ?? {}) as Record<string, number>;
+      const ccfg = mergeCoachConfig(settings?.coachCriteria);
+      const cLabel = new Map(COACH_CRITERIA.map((c) => [c.key, c.label]));
+      const cbd = Object.entries(coachBreakdown(cfacts, ccfg))
+        .map(([key, points]) => ({ key, label: cLabel.get(key) ?? key, qty: cfacts[key] ?? 0, points }))
+        .sort((a, b) => Math.abs(b.points) - Math.abs(a.points));
+      coach = { id: lineup.coachId, name: cRow?.name ?? "Entrenador", points: coachPointsFromFacts(cfacts, ccfg), breakdown: cbd };
+    }
+
     return {
       gameweekId,
       formation: lineup.formation,
       total: total?.points ?? null,
       starters: lineup.slots.filter((s) => s.role === "STARTER").map((s) => line(s.playerId)),
       bench: lineup.slots.filter((s) => s.role === "BENCH").map((s) => line(s.playerId)),
+      coach,
     };
   }
 

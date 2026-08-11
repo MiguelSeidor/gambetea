@@ -345,6 +345,26 @@ export class AdminService {
     return { ok: true };
   }
 
+  /** RE-INGESTAR las jornadas ya jugadas: vuelve a pedir los datos de cada partido al proveedor
+   *  (idempotente) y RECALCULA puntos de jugadores/entrenadores/equipos. Sirve para aplicar mejoras
+   *  del baremo/adaptador (p. ej. asistencias) a jornadas antiguas. NO reajusta el dinero ya
+   *  repartido (primas/compensación son idempotentes por jornada). En segundo plano; gasta ~3
+   *  peticiones por partido. */
+  hubReingest(adminId: string) {
+    return this.startJob("reingest", async () => {
+      const provider = createProvider();
+      const played = await this.prisma.gameweek.findMany({ where: { status: "FINISHED" }, orderBy: { number: "asc" } });
+      let playersScored = 0;
+      for (const gw of played) {
+        await playGameweekRecord(this.prisma, provider, gw); // re-ingesta (borra+reinserta apariciones/eventos)
+        const r = await this.scoring.computeGameweek(gw.id); // recalcula puntos desde el snapshot
+        playersScored += r.playersScored;
+      }
+      await this.audit(adminId, "hub.reingest", null, { gameweeks: played.length, playersScored });
+      return { gameweeks: played.length, playersScored };
+    });
+  }
+
   /** Comprueba cambios en el proveedor (altas, club, posición, bajas). En segundo plano. */
   hubSyncChanges(adminId: string) {
     return this.startJob("sync-changes", async () => {

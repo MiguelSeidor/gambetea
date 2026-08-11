@@ -111,6 +111,29 @@ export default function Jornadas() {
                           </div>
                         );
                       })}
+                      {detail.coach && (
+                        <div className="gw-pl">
+                          <button className="gw-pl-row" onClick={() => setOpenPlayer(openPlayer === detail.coach!.id ? null : detail.coach!.id)} aria-expanded={openPlayer === detail.coach.id}>
+                            <span className="pos DT">ENT</span>
+                            <span className="gw-pl-name">{detail.coach.name} <small className="muted">· entrenador</small></span>
+                            <span className="gw-pl-pts" style={{ color: detail.coach.points >= 0 ? "var(--ink)" : "#f87171" }}>{detail.coach.points} pts</span>
+                            <span className={`gw-chev${openPlayer === detail.coach.id ? " open" : ""}`}><Icon name="chevron" size={14} /></span>
+                          </button>
+                          {openPlayer === detail.coach.id && (
+                            <div className="gw-bd">
+                              {detail.coach.breakdown.length === 0 && <div className="muted" style={{ fontSize: ".82rem" }}>Sin puntos.</div>}
+                              {detail.coach.breakdown.map((b) => (
+                                <div className="gw-bd-row" key={b.key}>
+                                  <span>{b.label}{b.qty > 1 ? ` ×${b.qty}` : ""}</span>
+                                  <span style={{ color: b.points >= 0 ? "#4ade80" : "#f87171", fontVariantNumeric: "tabular-nums" }}>
+                                    {b.points >= 0 ? "+" : ""}{b.points}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

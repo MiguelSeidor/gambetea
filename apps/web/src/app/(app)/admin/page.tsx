@@ -139,6 +139,8 @@ export default function AdminPanel() {
           </span>
           <button className="btn-sm ghost" disabled={busy}
             onClick={() => run(async () => { await api.adminHubSyncChanges(); await loadOverview(); }, "Comprobación iniciada en segundo plano")}>Comprobar cambios</button>
+          <button className="btn-sm ghost" disabled={busy}
+            onClick={() => run(async () => { await api.adminHubReingest(); await loadOverview(); }, "Re-ingesta iniciada en segundo plano")}>Re-ingestar jornadas</button>
         </div>
         <p className="muted" style={{ fontSize: ".76rem", marginTop: 10 }}>
           «Inicializar» borra equipos, jugadores, ligas fantasy y partidos (las cuentas de usuario se conservan). Las demás tareas corren <b>en segundo plano</b> (con api-football tardan minutos por el límite de peticiones): pulsa <b>Refrescar</b> para ver el progreso y los recuentos.

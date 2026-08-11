@@ -270,12 +270,19 @@ export interface GameweekPlayerLine {
   isCaptain: boolean;
   breakdown: { key: string; label: string; qty: number; points: number }[];
 }
+export interface GameweekCoachLine {
+  id: string;
+  name: string;
+  points: number;
+  breakdown: { key: string; label: string; qty: number; points: number }[];
+}
 export interface TeamGameweekDetail {
   gameweekId: string;
   formation: string;
   total: number | null;
   starters: GameweekPlayerLine[];
   bench: GameweekPlayerLine[];
+  coach: GameweekCoachLine | null;
 }
 export type InsuranceTier = "BASIC" | "MEDIUM" | "ADVANCED";
 export interface Loan {
@@ -513,6 +520,7 @@ export const api = {
   adminHubBackfill: () => request<{ started: boolean; job: string }>("/admin/hub/backfill", { method: "POST" }),
   adminHubPlay: (count: number) => request<{ started: boolean; job: string }>("/admin/hub/play", { method: "POST", body: { count } }),
   adminHubSyncChanges: () => request<{ started: boolean; job: string }>("/admin/hub/sync-changes", { method: "POST" }),
+  adminHubReingest: () => request<{ started: boolean; job: string }>("/admin/hub/reingest", { method: "POST" }),
   adminResetRequests: () => request<ResetRequest[]>("/admin/reset-requests"),
   adminApproveReset: (id: string) => request<{ ok: boolean; tempPassword: string }>(`/admin/reset-requests/${id}/approve`, { method: "POST" }),
   adminRejectReset: (id: string) => request<{ ok: boolean }>(`/admin/reset-requests/${id}/reject`, { method: "POST" }),

@@ -55,6 +55,19 @@ export function coachPointsFromFacts(facts: Record<string, number>, config: Coac
   return pts;
 }
 
+/** Desglose por concepto del entrenador (para auditar), aplicando la config de la liga. */
+export function coachBreakdown(facts: Record<string, number>, config: CoachConfig): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const c of COACH_CRITERIA) {
+    const cfg = config[c.key];
+    if (!cfg || !cfg.enabled) continue;
+    const qty = facts[c.key] ?? 0;
+    if (qty === 0) continue;
+    out[c.key] = cfg.value * qty;
+  }
+  return out;
+}
+
 /** Hechos "de resultado" (sin eventos): los que dependen solo de goles y localía. */
 export function resultFacts(gf: number, ga: number, isHome: boolean): Record<string, number> {
   const diff = gf - ga;

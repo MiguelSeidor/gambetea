@@ -24,6 +24,10 @@ export default function Plantilla() {
   const [shields, setShields] = useState<Map<string, Shield>>(new Map());
   const [busy, setBusy] = useState<string | null>(null);
   const [pending, setPending] = useState<{ playerId: string; tier: InsuranceTier | "" } | null>(null);
+  const [shieldPending, setShieldPending] = useState<{ player: RosterPlayer; remove: boolean } | null>(null);
+  const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
+
+  const notify = (text: string, ok: boolean) => { setToast({ text, ok }); setTimeout(() => setToast(null), 3200); };
 
   const load = useCallback(async () => {
     const [policies, rules, sh] = await Promise.all([api.insurances(leagueId), api.rules(), api.shields(leagueId)]);
@@ -36,21 +40,27 @@ export default function Plantilla() {
   if (!team) return null;
   const shieldCount = [...shields.values()].length;
 
-  async function toggleShield(p: RosterPlayer) {
+  function requestShield(p: RosterPlayer) {
     const has = shields.has(p.id);
-    if (has) {
-      if (!window.confirm(`¿Quitar el blindaje de ${p.name}? Dejará de renovarse y caducará en su fecha de fin.`)) return;
-    } else {
-      if (shieldCount >= 3) { window.alert("Ya tienes 3 blindajes activos. Quita uno para blindar otro."); return; }
-      if (!window.confirm(`Blindar a ${p.name} cuesta ${eur(p.value)} por semana (su valor de mercado) y se renueva solo hasta que lo quites. ¿Continuar?`)) return;
+    if (!has && shieldCount >= 3) {
+      notify("Ya tienes 3 blindajes activos. Quita uno para blindar a otro.", false);
+      return;
     }
-    setBusy(p.id);
+    setShieldPending({ player: p, remove: has });
+  }
+
+  async function confirmShield() {
+    if (!shieldPending) return;
+    const { player, remove } = shieldPending;
+    setBusy(player.id);
     try {
-      if (has) await api.removeShield(leagueId, p.id);
-      else await api.shieldPlayer(leagueId, p.id);
+      if (remove) await api.removeShield(leagueId, player.id);
+      else await api.shieldPlayer(leagueId, player.id);
       await Promise.all([load(), refresh()]);
+      notify(remove ? "Blindaje retirado" : `${player.name} blindado`, true);
+      setShieldPending(null);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "No se pudo actualizar el blindaje");
+      notify(err instanceof Error ? err.message : "No se pudo actualizar el blindaje", false);
     } finally {
       setBusy(null);
     }
@@ -126,7 +136,7 @@ export default function Plantilla() {
                     style={{ flex: "0 0 auto", ...(shields.has(p.id) ? { borderColor: "#a78bfa", color: "#a78bfa" } : {}) }}
                     disabled={busy === p.id}
                     title={shields.has(p.id) ? "Quitar blindaje" : `Blindar (${eur(p.value)}/semana)`}
-                    onClick={() => void toggleShield(p)}
+                    onClick={() => requestShield(p)}
                   >
                     🛡{shields.has(p.id) ? "✓" : ""}
                   </button>
@@ -193,6 +203,27 @@ export default function Plantilla() {
           </p>
         )}
       </Modal>
+
+      <Modal
+        open={shieldPending !== null}
+        title={shieldPending?.remove ? "Quitar blindaje" : "Blindar jugador"}
+        confirmLabel={shieldPending?.remove ? "Quitar blindaje" : "Blindar"}
+        cancelLabel="Volver"
+        busy={busy !== null}
+        onCancel={() => setShieldPending(null)}
+        onConfirm={confirmShield}
+      >
+        {shieldPending?.remove ? (
+          <p>¿Quitar el blindaje de <b>{shieldPending.player.name}</b>? Dejará de renovarse y seguirá activo hasta su <b>fecha de fin</b>; después su cláusula volverá a poder pagarse.</p>
+        ) : shieldPending ? (
+          <p>
+            Vas a <b>blindar</b> a <b>{shieldPending.player.name}</b>: nadie podrá pagar su cláusula.
+            Cuesta <b>{eur(shieldPending.player.value)}/semana</b> (su valor de mercado) y se <b>renueva solo</b> hasta que lo quites. Máximo 3 blindajes.
+          </p>
+        ) : null}
+      </Modal>
+
+      {toast && <div className={`toast ${toast.ok ? "ok" : "err"}`}>{toast.text}</div>}
     </>
   );
 }

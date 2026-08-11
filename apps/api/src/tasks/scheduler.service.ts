@@ -45,11 +45,12 @@ export class SchedulerService {
     private readonly hubSync: HubSyncService,
   ) {}
 
-  /** Cobra las tres cargas de la jornada: salarios + seguro + cuotas de préstamo. Idempotente. */
+  /** Cobra las cargas de la jornada: salarios + seguro + cuotas de préstamo + blindajes. Idempotente. */
   private async chargeDues(gameweekId: string): Promise<void> {
     await this.market.chargeSalaries(gameweekId);
     await this.economy.chargeInsurancePremiums(gameweekId);
     await this.economy.chargeLoanInstallments(gameweekId);
+    await this.economy.chargeShieldRenewals(gameweekId);
   }
 
   // === Disparadores automáticos ==============================================

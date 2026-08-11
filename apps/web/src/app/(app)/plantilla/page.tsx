@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/components/AppProvider";
 import Modal from "@/components/Modal";
 import { eur } from "@/lib/format";
-import { api, POS_SHORT, type InsuranceTier, type InsuranceTierInfo, type PlayerPos, type RosterPlayer } from "@/lib/api";
+import { api, POS_SHORT, type InsuranceTier, type InsuranceTierInfo, type PlayerPos, type RosterPlayer, type Shield } from "@/lib/api";
 import TeamCrest from "@/components/TeamCrest";
 
 const ORDER: PlayerPos[] = ["GK", "DEF", "MID", "FWD"];
@@ -15,21 +15,46 @@ const TIERS: { value: InsuranceTier; label: string }[] = [
   { value: "ADVANCED", label: "Avanzado +5" },
 ];
 
+const fmtDay = (iso: string) => new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
+
 export default function Plantilla() {
-  const { leagueId, team } = useApp();
+  const { leagueId, team, refresh } = useApp();
   const [insurance, setInsurance] = useState<Map<string, InsuranceTier>>(new Map());
   const [insInfo, setInsInfo] = useState<Map<InsuranceTier, InsuranceTierInfo>>(new Map());
+  const [shields, setShields] = useState<Map<string, Shield>>(new Map());
   const [busy, setBusy] = useState<string | null>(null);
   const [pending, setPending] = useState<{ playerId: string; tier: InsuranceTier | "" } | null>(null);
 
   const load = useCallback(async () => {
-    const [policies, rules] = await Promise.all([api.insurances(leagueId), api.rules()]);
+    const [policies, rules, sh] = await Promise.all([api.insurances(leagueId), api.rules(), api.shields(leagueId)]);
     setInsurance(new Map(policies.map((p) => [p.playerId, p.tier])));
     setInsInfo(new Map(rules.insurance.map((i) => [i.tier, i])));
+    setShields(new Map(sh.map((s) => [s.playerId, s])));
   }, [leagueId]);
   useEffect(() => { void load(); }, [load]);
 
   if (!team) return null;
+  const shieldCount = [...shields.values()].length;
+
+  async function toggleShield(p: RosterPlayer) {
+    const has = shields.has(p.id);
+    if (has) {
+      if (!window.confirm(`¿Quitar el blindaje de ${p.name}? Dejará de renovarse y caducará en su fecha de fin.`)) return;
+    } else {
+      if (shieldCount >= 3) { window.alert("Ya tienes 3 blindajes activos. Quita uno para blindar otro."); return; }
+      if (!window.confirm(`Blindar a ${p.name} cuesta ${eur(p.value)} por semana (su valor de mercado) y se renueva solo hasta que lo quites. ¿Continuar?`)) return;
+    }
+    setBusy(p.id);
+    try {
+      if (has) await api.removeShield(leagueId, p.id);
+      else await api.shieldPlayer(leagueId, p.id);
+      await Promise.all([load(), refresh()]);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "No se pudo actualizar el blindaje");
+    } finally {
+      setBusy(null);
+    }
+  }
   const byPos = (pos: PlayerPos): RosterPlayer[] => team.players.filter((p) => p.position === pos);
 
   // El select es controlado por `insurance`; no cambia hasta confirmar, así que cancelar no
@@ -59,9 +84,9 @@ export default function Plantilla() {
   return (
     <>
       <div className="page-head">
-        <span className="eb">{team.squadSize} jugadores · {team.coaches.length} entrenadores</span>
+        <span className="eb">{team.squadSize} jugadores · {team.coaches.length} entrenadores · 🛡 {shieldCount}/3 blindajes</span>
         <h1>Plantilla</h1>
-        <p>Sin límite de fichas (pagas salario por todas). Asegura a tus jugadores: si un titular asegurado se lesiona, suma puntos extra.</p>
+        <p>Sin límite de fichas (pagas salario por todas). <b>Asegura</b> a tus jugadores (bonus si un titular se lesiona) o <b>blíndalos</b> 🛡 para que nadie pueda pagar su cláusula (cuesta su valor de mercado por semana; máx. 3).</p>
       </div>
 
       <div className="grid g-4">
@@ -87,8 +112,24 @@ export default function Plantilla() {
                     {p.name}
                     {p.injured && <span title="Lesionado" style={{ marginLeft: 6 }}>🩹</span>}
                     {p.suspended && <span title="Sancionado" style={{ marginLeft: 4 }}>🟥</span>}
-                    <small><TeamCrest teamId={p.teamId} name={p.clubName} short={p.club} /> · {eur(p.value)}</small>
+                    <small>
+                      <TeamCrest teamId={p.teamId} name={p.clubName} short={p.club} /> · {eur(p.value)}
+                      {shields.get(p.id) && (
+                        <span style={{ color: "#a78bfa", marginLeft: 6 }} title={shields.get(p.id)!.autoRenew ? "Blindado (se renueva solo)" : "Blindaje sin renovar: caduca en la fecha indicada"}>
+                          🛡 {fmtDay(shields.get(p.id)!.expiresAt)}{!shields.get(p.id)!.autoRenew && " · fin"}
+                        </span>
+                      )}
+                    </small>
                   </span>
+                  <button
+                    className="chip"
+                    style={{ flex: "0 0 auto", ...(shields.has(p.id) ? { borderColor: "#a78bfa", color: "#a78bfa" } : {}) }}
+                    disabled={busy === p.id}
+                    title={shields.has(p.id) ? "Quitar blindaje" : `Blindar (${eur(p.value)}/semana)`}
+                    onClick={() => void toggleShield(p)}
+                  >
+                    🛡{shields.has(p.id) ? "✓" : ""}
+                  </button>
                   <span className="pts-col">{p.points}<small>pts</small></span>
                   <select
                     style={{ marginLeft: 0 }}

@@ -140,6 +140,7 @@ model Player {
   rosterOf   RosterPlayer[]
   listings   MarketListing[]
   insurances PlayerInsurance[]
+  shields    PlayerShield[]
 }
 
 model Coach {
@@ -368,6 +369,7 @@ model FantasyTeam {
   transactions Transaction[]
   loans        Loan[]
   insurances   PlayerInsurance[]
+  shields      PlayerShield[]
   adOffers     AdBoardOffer[]
   adContracts  AdContract[]
   promos       TeamPromo[]
@@ -619,6 +621,7 @@ enum TxType {
   COACH
   COMPENSATION
   ADJUST
+  SHIELD
 }
 
 // Promo random para los últimos clasificados (catch-up, Sprint 14).
@@ -673,6 +676,21 @@ model PlayerInsurance {
   player        Player        @relation(fields: [playerId], references: [id], onDelete: Cascade)
   tier          InsuranceTier
   createdAt     DateTime      @default(now())
+
+  @@unique([fantasyTeamId, playerId])
+}
+
+// Blindaje (ADR-021): impide que otro equipo pague la cláusula de tu jugador. Cuesta el valor de
+// mercado del jugador por semana; se renueva mientras `autoRenew` y caduca en `expiresAt` si no.
+model PlayerShield {
+  id            String      @id @default(cuid())
+  fantasyTeamId String
+  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+  playerId      String
+  player        Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  expiresAt     DateTime    // fecha efectiva de fin del blindaje si no se renueva
+  autoRenew     Boolean     @default(true)
+  createdAt     DateTime    @default(now())
 
   @@unique([fantasyTeamId, playerId])
 }

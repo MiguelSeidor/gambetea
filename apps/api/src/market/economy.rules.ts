@@ -73,6 +73,12 @@ export function frenchInstallment(principal: number, i: number, n: number): numb
   return Math.ceil((principal * i) / (1 - Math.pow(1 + i, -n)));
 }
 
+// --- Blindaje (ADR-021) -----------------------------------------------------
+/** Máximo de blindajes activos por equipo. */
+export const MAX_SHIELDS = 3;
+/** Duración (días) de cada semana de blindaje antes de renovar/caducar. */
+export const SHIELD_DURATION_DAYS = 7;
+
 // --- Seguro médico (ADR-012) ------------------------------------------------
 export type InsuranceTier = "BASIC" | "MEDIUM" | "ADVANCED";
 // Coste recalibrado al alza (petición del owner): básico ×100, medio ×300, avanzado ×500 sobre

@@ -226,6 +226,11 @@ export class MarketService {
     });
     if (!owned) throw new NotFoundException("Ese jugador no pertenece a nadie en la liga");
     if (owned.fantasyTeam.id === teamId) throw new BadRequestException("Ya es tuyo");
+    // Blindaje (ADR-021): si el jugador está blindado por su dueño, su cláusula no se puede pagar.
+    const shielded = await this.prisma.playerShield.findFirst({
+      where: { fantasyTeamId: owned.fantasyTeam.id, playerId, expiresAt: { gt: new Date() } },
+    });
+    if (shielded) throw new BadRequestException("Ese jugador está blindado: no puedes pagar su cláusula");
 
     const mult = (await this.prisma.leagueSettings.findUnique({ where: { leagueId }, select: { clauseMultiplier: true } }))?.clauseMultiplier ?? CLAUSE_MULTIPLIER;
     const clause = owned.player.value * mult;
@@ -238,8 +243,9 @@ export class MarketService {
         where: { id: owned.id },
         data: { fantasyTeamId: teamId, purchasePrice: clause, acquiredAt: new Date() },
       }),
-      // El seguro no se traspasa: el vendedor lo pierde y el comprador no lo hereda.
+      // El seguro y el blindaje no se traspasan: el vendedor los pierde.
       this.prisma.playerInsurance.deleteMany({ where: { fantasyTeamId: sellerTeamId, playerId } }),
+      this.prisma.playerShield.deleteMany({ where: { fantasyTeamId: sellerTeamId, playerId } }),
       this.prisma.fantasyTeam.update({ where: { id: teamId }, data: { budget: { decrement: clause } } }),
       this.prisma.fantasyTeam.update({ where: { id: sellerTeamId }, data: { budget: { increment: clause } } }),
       this.prisma.transaction.create({

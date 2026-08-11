@@ -300,6 +300,13 @@ export interface InsurancePolicy {
   tier: InsuranceTier;
   bonus: number;
 }
+export interface Shield {
+  playerId: string;
+  playerName: string;
+  weeklyCost: number;
+  expiresAt: string;
+  autoRenew: boolean;
+}
 export interface StadiumTier {
   level: number;
   name: string;
@@ -468,6 +475,11 @@ export const api = {
       body: { amount },
     }),
   insurances: (leagueId: string) => request<InsurancePolicy[]>(`/leagues/${leagueId}/insurances`),
+  shields: (leagueId: string) => request<Shield[]>(`/leagues/${leagueId}/shields`),
+  shieldPlayer: (leagueId: string, playerId: string) =>
+    request<{ playerId: string; expiresAt: string; cost: number }>(`/leagues/${leagueId}/team/players/${playerId}/shield`, { method: "POST" }),
+  removeShield: (leagueId: string, playerId: string) =>
+    request<{ playerId: string; expiresAt: string; autoRenew: boolean }>(`/leagues/${leagueId}/team/players/${playerId}/shield`, { method: "DELETE" }),
   insurePlayer: (leagueId: string, playerId: string, tier: InsuranceTier) =>
     request<{ playerId: string; tier: InsuranceTier }>(`/leagues/${leagueId}/team/players/${playerId}/insurance`, {
       method: "POST",

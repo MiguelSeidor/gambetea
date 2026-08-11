@@ -6,7 +6,9 @@ import {
   LOAN_MAX_PCT,
   loanRatePerGameweek,
   MAX_LOANS,
+  MAX_SHIELDS,
   SEASON_GAMEWEEKS,
+  SHIELD_DURATION_DAYS,
   type InsuranceTier,
 } from "./economy.rules";
 
@@ -165,5 +167,98 @@ export class EconomyService {
       charged++;
     }
     return charged;
+  }
+
+  // === Blindaje (ADR-021) =====================================================
+
+  /** Blinda a un jugador de tu plantilla: cobra su valor de mercado (1 semana) y crea/renueva el
+   *  blindaje. Máx. 3 activos. No puedes iniciarlo estando en números rojos. */
+  async shieldPlayer(userId: string, leagueId: string, playerId: string) {
+    const { teamId, budget } = await this.resolve(userId, leagueId);
+    if (budget < 0) throw new BadRequestException("Estás en números rojos: no puedes blindar hasta recuperarte");
+    const owned = await this.prisma.rosterPlayer.findFirst({
+      where: { fantasyTeamId: teamId, playerId },
+      select: { player: { select: { name: true, value: true } } },
+    });
+    if (!owned) throw new BadRequestException("Solo puedes blindar jugadores de tu plantilla");
+    const now = new Date();
+    const existing = await this.prisma.playerShield.findUnique({
+      where: { fantasyTeamId_playerId: { fantasyTeamId: teamId, playerId } },
+    });
+    if (!existing) {
+      const active = await this.prisma.playerShield.count({ where: { fantasyTeamId: teamId, expiresAt: { gt: now } } });
+      if (active >= MAX_SHIELDS) throw new BadRequestException(`Ya tienes ${MAX_SHIELDS} blindajes activos`);
+    }
+    const cost = owned.player.value;
+    const expiresAt = new Date(now.getTime() + SHIELD_DURATION_DAYS * 24 * 60 * 60 * 1000);
+    await this.prisma.$transaction([
+      this.prisma.fantasyTeam.update({ where: { id: teamId }, data: { budget: { decrement: cost } } }),
+      this.prisma.transaction.create({
+        data: { fantasyTeamId: teamId, type: "SHIELD", amount: -cost, description: `Blindaje de ${owned.player.name}` },
+      }),
+      this.prisma.playerShield.upsert({
+        where: { fantasyTeamId_playerId: { fantasyTeamId: teamId, playerId } },
+        create: { fantasyTeamId: teamId, playerId, expiresAt, autoRenew: true },
+        update: { expiresAt, autoRenew: true },
+      }),
+    ]);
+    return { playerId, expiresAt, cost };
+  }
+
+  /** Quita el blindaje: deja de renovarse; sigue activo (bloquea la cláusula) hasta `expiresAt`. */
+  async removeShield(userId: string, leagueId: string, playerId: string) {
+    const { teamId } = await this.resolve(userId, leagueId);
+    const shield = await this.prisma.playerShield.findUnique({
+      where: { fantasyTeamId_playerId: { fantasyTeamId: teamId, playerId } },
+    });
+    if (!shield) throw new NotFoundException("Ese jugador no está blindado");
+    await this.prisma.playerShield.update({ where: { id: shield.id }, data: { autoRenew: false } });
+    return { playerId, expiresAt: shield.expiresAt, autoRenew: false };
+  }
+
+  /** Blindajes activos del equipo (con coste semanal = valor de mercado actual y fin efectivo). */
+  async getShields(userId: string, leagueId: string) {
+    const { teamId } = await this.resolve(userId, leagueId);
+    const shields = await this.prisma.playerShield.findMany({
+      where: { fantasyTeamId: teamId, expiresAt: { gt: new Date() } },
+      include: { player: { select: { id: true, name: true, value: true } } },
+      orderBy: { expiresAt: "asc" },
+    });
+    return shields.map((s) => ({
+      playerId: s.playerId,
+      playerName: s.player.name,
+      weeklyCost: s.player.value,
+      expiresAt: s.expiresAt,
+      autoRenew: s.autoRenew,
+    }));
+  }
+
+  /** Renovación semanal de blindajes: cobra el valor ACTUAL de cada jugador cuya semana venció y
+   *  se auto-renueva; los que no se renuevan (quitados) caducan. Idempotente por vencimiento. */
+  async chargeShieldRenewals(gameweekId: string): Promise<number> {
+    const gw = await this.prisma.gameweek.findUnique({ where: { id: gameweekId }, select: { seasonId: true } });
+    if (!gw) return 0;
+    const now = new Date();
+    const due = await this.prisma.playerShield.findMany({
+      where: { expiresAt: { lte: now }, fantasyTeam: { membership: { league: { seasonId: gw.seasonId } } } },
+      select: { id: true, fantasyTeamId: true, autoRenew: true, player: { select: { name: true, value: true } } },
+    });
+    let n = 0;
+    const next = new Date(now.getTime() + SHIELD_DURATION_DAYS * 24 * 60 * 60 * 1000);
+    for (const s of due) {
+      if (!s.autoRenew) {
+        await this.prisma.playerShield.delete({ where: { id: s.id } }); // caduca
+        continue;
+      }
+      await this.prisma.$transaction([
+        this.prisma.fantasyTeam.update({ where: { id: s.fantasyTeamId }, data: { budget: { decrement: s.player.value } } }),
+        this.prisma.transaction.create({
+          data: { fantasyTeamId: s.fantasyTeamId, type: "SHIELD", amount: -s.player.value, gameweekId, description: `Blindaje de ${s.player.name} (renovación)` },
+        }),
+        this.prisma.playerShield.update({ where: { id: s.id }, data: { expiresAt: next } }),
+      ]);
+      n++;
+    }
+    return n;
   }
 }

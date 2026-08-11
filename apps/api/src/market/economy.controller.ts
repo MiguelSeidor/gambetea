@@ -53,4 +53,20 @@ export class EconomyController {
   insurances(@CurrentUser() user: AuthUser, @Param("leagueId") leagueId: string) {
     return this.economy.getInsurances(user.id, leagueId);
   }
+
+  @Get("shields")
+  shields(@CurrentUser() user: AuthUser, @Param("leagueId") leagueId: string) {
+    return this.economy.getShields(user.id, leagueId);
+  }
+
+  @Post("team/players/:playerId/shield")
+  @HttpCode(200)
+  shield(@CurrentUser() user: AuthUser, @Param("leagueId") leagueId: string, @Param("playerId") playerId: string) {
+    return this.economy.shieldPlayer(user.id, leagueId, playerId);
+  }
+
+  @Delete("team/players/:playerId/shield")
+  removeShield(@CurrentUser() user: AuthUser, @Param("leagueId") leagueId: string, @Param("playerId") playerId: string) {
+    return this.economy.removeShield(user.id, leagueId, playerId);
+  }
 }

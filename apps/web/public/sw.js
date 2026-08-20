@@ -1,11 +1,12 @@
-/* Service worker de Gambetea (PWA). Conservador a propósito:
-   - Navegaciones (HTML): network-first → siempre HTML fresco tras un deploy; si no hay red,
-     se sirve la última página cacheada como fallback offline.
-   - Estáticos same-origin (JS/CSS/img con nombre hasheado): cache-first + revalidación.
-   - NO tocamos peticiones cross-origin (la API y los escudos viven en otro dominio) ni no-GET.
-   Los chunks de Next van hasheados, así que cachear no deja JS obsoleto: el HTML nuevo apunta a
-   URLs nuevas. */
-const CACHE = "gambetea-v1";
+/* Service worker de Gambetea (PWA). Diseñado para NO servir nunca contenido obsoleto tras un
+   deploy (el bug clásico de PWA: el usuario ve el build viejo cacheado):
+   - Navegaciones (HTML): network-first → siempre la versión desplegada; sólo si NO hay red se
+     sirve la última página cacheada como fallback offline.
+   - Todo lo demás (JS/CSS/imágenes): SIN caché del SW → el navegador lo pide normal y siempre llega
+     fresco. Los chunks de Next van hasheados, así que esto no penaliza.
+   Al activarse una versión nueva del SW se borran las cachés antiguas y toma el control al instante.
+   Cambiar CACHE (v2, v3…) fuerza la limpieza de la caché anterior. */
+const CACHE = "gambetea-v2";
 const OFFLINE_URL = "/";
 
 self.addEventListener("install", (event) => {
@@ -20,36 +21,23 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+// Permite que la página fuerce la activación del SW nuevo (ver PwaRegister).
+self.addEventListener("message", (e) => { if (e.data === "SKIP_WAITING") self.skipWaiting(); });
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
-  const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return; // API/CDN externos: sin intervención
-
-  if (req.mode === "navigate") {
-    event.respondWith(
-      fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(OFFLINE_URL, copy)).catch(() => {});
-          return res;
-        })
-        .catch(() => caches.match(OFFLINE_URL)),
-    );
-    return;
-  }
-
+  // Solo interceptamos NAVEGACIONES (documento): network-first con fallback offline. El resto de
+  // peticiones (estáticos, RSC, API) se dejan pasar sin caché → nunca obsoletas.
+  if (req.mode !== "navigate") return;
+  if (new URL(req.url).origin !== self.location.origin) return;
   event.respondWith(
-    caches.match(req).then(
-      (cached) =>
-        cached ||
-        fetch(req)
-          .then((res) => {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
-            return res;
-          })
-          .catch(() => cached),
-    ),
+    fetch(req)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(OFFLINE_URL, copy)).catch(() => {});
+        return res;
+      })
+      .catch(() => caches.match(OFFLINE_URL)),
   );
 });

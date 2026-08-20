@@ -86,13 +86,20 @@ export default function AppProvider({ children }: { children: React.ReactNode })
     }
   }, [loadLeagueData, router]);
 
+  // Bootstrap de sesión: DEBE correr una sola vez por montaje. En esta versión de Next el objeto
+  // de useRouter no es estable entre renders, así que sin este guard el efecto se re-ejecutaría en
+  // bucle (y como admin, cada pasada hace router.replace("/admin") → bucle visible al entrar).
+  const bootstrapped = useRef(false);
   useEffect(() => {
+    if (bootstrapped.current) return;
+    bootstrapped.current = true;
     if (!getToken()) {
       router.replace("/login");
       return;
     }
     void load();
-  }, [load, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const selectLeague = useCallback(
     async (id: string) => {

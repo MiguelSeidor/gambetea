@@ -70,8 +70,12 @@ export class SchedulerService {
   @Cron(CronExpression.EVERY_MINUTE, { name: "snapshot-and-scoring" })
   async minuteTick(): Promise<void> {
     await this.serialize(async () => {
-      await this.snapshotDue();
-      await this.scoreDue();
+      try {
+        await this.snapshotDue();
+        await this.scoreDue();
+      } catch (e) {
+        this.log.error(`minuteTick: ${(e as Error).message}`); // nunca tumbar el proceso
+      }
     });
   }
 
@@ -94,13 +98,17 @@ export class SchedulerService {
   @Cron("0 * * * *", { name: "midnight-market" })
   async hourlyMarket(): Promise<void> {
     await this.serialize(async () => {
-      const comps = await this.prisma.competition.findMany();
-      for (const comp of comps) {
-        if (this.localHour(comp.timezone) === 0) {
-          this.log.log(`00:00 en ${comp.name} — salarios, mercado y valores…`);
-          await this.chargeSalariesForToday(comp);
-          await this.marketAndValues(comp.id);
+      try {
+        const comps = await this.prisma.competition.findMany();
+        for (const comp of comps) {
+          if (this.localHour(comp.timezone) === 0) {
+            this.log.log(`00:00 en ${comp.name} — salarios, mercado y valores…`);
+            await this.chargeSalariesForToday(comp);
+            await this.marketAndValues(comp.id);
+          }
         }
+      } catch (e) {
+        this.log.error(`hourlyMarket: ${(e as Error).message}`); // nunca tumbar el proceso
       }
     });
   }

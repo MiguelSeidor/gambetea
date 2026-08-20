@@ -16,6 +16,7 @@ export default function AdminPanel() {
   const [audit, setAudit] = useState<Awaited<ReturnType<typeof api.adminAudit>> | null>(null);
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
 
   // Formularios
   const [money, setMoney] = useState({ amount: 1000000, reason: "" });
@@ -53,7 +54,7 @@ export default function AdminPanel() {
     setResetReqs(rr);
   }, []);
   useEffect(() => {
-    if (user.isAdmin) void loadOverview();
+    if (user.isAdmin) loadOverview().catch((e) => setLoadErr(e instanceof Error ? e.message : "Error cargando el panel"));
   }, [user.isAdmin, loadOverview]);
 
   const loadTeam = useCallback(async (id: string) => {
@@ -69,7 +70,23 @@ export default function AdminPanel() {
       </div>
     );
   }
-  if (!ov) return null;
+  if (!ov) {
+    return (
+      <div className="page-head">
+        <span className="eb">God-mode del Hub</span>
+        <h1>Administración global</h1>
+        {loadErr ? (
+          <p style={{ color: "#f87171" }}>No se pudo cargar el panel: {loadErr}. La API puede estar caída o reiniciándose — reintenta en un momento.</p>
+        ) : (
+          <p className="muted">Cargando el panel…</p>
+        )}
+        <button className="btn" style={{ marginTop: 14 }}
+          onClick={() => { setLoadErr(null); loadOverview().catch((e) => setLoadErr(e instanceof Error ? e.message : "Error")); }}>
+          <span>Reintentar</span>
+        </button>
+      </div>
+    );
+  }
 
   const teamsOfLeague = detail ? ov.teams.filter((t) => t.leagueId === detail.leagueId) : [];
 

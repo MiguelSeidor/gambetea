@@ -191,6 +191,10 @@ export async function playGameweekRecord(
     if (!ext) continue;
     const data = await provider.getMatchData(ext);
 
+    // Defensa: si el proveedor no devolvió datos (rate-limit / cobertura), NO sobrescribimos lo ya
+    // guardado — evita dejar el partido con 0 apariciones (jugadores a 0). Se reintenta más tarde.
+    if (data.appearances.length === 0 && data.events.length === 0) continue;
+
     // Idempotencia: limpiar lo previo de este partido y reinsertar
     await prisma.matchEvent.deleteMany({ where: { matchId: match.id } });
     await prisma.appearance.deleteMany({ where: { matchId: match.id } });

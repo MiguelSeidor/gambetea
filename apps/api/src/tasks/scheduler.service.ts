@@ -53,39 +53,56 @@ export class SchedulerService {
     await this.economy.chargeShieldRenewals(gameweekId);
   }
 
+  // Serializa TODO el trabajo programado (una sola instancia, ADR-010). Un settle con api-football
+  // tarda MINUTOS (throttle 6,5 s/petición), más que el tick por minuto; sin esto, el siguiente tick
+  // arrancaría OTRO settle de la misma jornada en paralelo → apariciones corruptas (jugadores a 0),
+  // cobros/liquidaciones DOBLES y un backend saturado. Con la cadena, cada tarea espera a la anterior.
+  private chain: Promise<unknown> = Promise.resolve();
+  private serialize<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.chain.then(fn, fn); // corre tras la anterior, aun si esta falló
+    this.chain = run.then(() => undefined, () => undefined); // la cadena nunca queda rechazada
+    return run as Promise<T>;
+  }
+
   // === Disparadores automáticos ==============================================
 
   /** Cada minuto: toma snapshots al llegar el deadline y puntúa jornadas ya terminadas. */
   @Cron(CronExpression.EVERY_MINUTE, { name: "snapshot-and-scoring" })
   async minuteTick(): Promise<void> {
-    await this.snapshotDue();
-    await this.scoreDue();
+    await this.serialize(async () => {
+      await this.snapshotDue();
+      await this.scoreDue();
+    });
   }
 
   /** Cada día (05:00): diff del Hub contra el proveedor (altas, club, posición, bajas). ADR-018/019.
    *  Con el mock no hay cambios (idempotente); con api-football cuesta ~21 peticiones. */
   @Cron("0 5 * * *", { name: "hub-daily-diff" })
   async dailyHubDiff(): Promise<void> {
-    try {
-      const r = await this.hubSync.detectChanges();
-      if (r.total > 0) this.log.log(`Diff diario del Hub: ${r.total} cambios`);
-    } catch (e) {
-      this.log.warn(`Diff diario del Hub omitido: ${(e as Error).message}`);
-    }
+    await this.serialize(async () => {
+      try {
+        const r = await this.hubSync.detectChanges();
+        if (r.total > 0) this.log.log(`Diff diario del Hub: ${r.total} cambios`);
+      } catch (e) {
+        this.log.warn(`Diff diario del Hub omitido: ${(e as Error).message}`);
+      }
+    });
   }
 
   /** Cada hora: en las competiciones donde son las 00:00 locales, cobra salarios (si hoy hay
    *  jornada), resuelve el mercado y revaloriza. */
   @Cron("0 * * * *", { name: "midnight-market" })
   async hourlyMarket(): Promise<void> {
-    const comps = await this.prisma.competition.findMany();
-    for (const comp of comps) {
-      if (this.localHour(comp.timezone) === 0) {
-        this.log.log(`00:00 en ${comp.name} — salarios, mercado y valores…`);
-        await this.chargeSalariesForToday(comp);
-        await this.marketAndValues(comp.id);
+    await this.serialize(async () => {
+      const comps = await this.prisma.competition.findMany();
+      for (const comp of comps) {
+        if (this.localHour(comp.timezone) === 0) {
+          this.log.log(`00:00 en ${comp.name} — salarios, mercado y valores…`);
+          await this.chargeSalariesForToday(comp);
+          await this.marketAndValues(comp.id);
+        }
       }
-    }
+    });
   }
 
   /** Cobra salarios de la(s) jornada(s) cuyo primer partido es HOY (día local). Idempotente. */
@@ -134,6 +151,9 @@ export class SchedulerService {
 
   /** Juega la jornada (Data Hub), puntúa desde el snapshot y reparte primas. */
   private async settleGameweek(gw: { id: string; number: number }): Promise<void> {
+    // Re-chequeo defensivo: si ya está finalizada, no la re-liquidamos (evita doble liquidación).
+    const fresh = await this.prisma.gameweek.findUnique({ where: { id: gw.id }, select: { status: true } });
+    if (fresh?.status === "FINISHED") return;
     await this.scoring.snapshotGameweek(gw.id); // asegura snapshot (no sobreescribe)
     await playGameweekRecord(this.prisma, this.provider, gw); // resultados + eventos → FINISHED
     await this.scoring.computeGameweek(gw.id); // puntos jugador + equipo (desde snapshot)
@@ -176,6 +196,10 @@ export class SchedulerService {
   /** Ejecuta TODO el ciclo a demanda para todas las competiciones. `force` liquida la próxima
    *  jornada aunque aún no se haya jugado (fast-forward de pruebas). */
   async runDailyTick(force: boolean): Promise<TickResult> {
+    return this.serialize(() => this.doDailyTick(force));
+  }
+
+  private async doDailyTick(force: boolean): Promise<TickResult> {
     const comps = await this.prisma.competition.findMany();
     const competitions: CompetitionTick[] = [];
     for (const comp of comps) {
